@@ -1,0 +1,331 @@
+import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { getWithdrawals, approveWithdrawal, rejectWithdrawal } from '../api/withdrawals'
+import type { Withdrawal } from '../types'
+import { useAuth } from '../context/AuthContext'
+import { canProcessPayments } from '../utils/roles'
+import { getWithdrawalFee } from '../api/config'
+import client from '../api/client'
+import './OrdersScreen.css'
+import './WithdrawalsScreen.css'
+
+function fmtNgn(n: number) { return '₦' + (n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }
+
+// Copy-to-clipboard row component
+function CopyRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true); setTimeout(() => setCopied(false), 2000)
+    })
+  }
+  return (
+    <div className="copy-row">
+      <span className="copy-label">{label}</span>
+      <span className={'copy-value' + (mono ? ' mono' : '')}>{value}</span>
+      <button className={'copy-btn' + (copied ? ' copied' : '')} onClick={copy}>
+        {copied ? '✓ 已复制' : '复制'}
+      </button>
+    </div>
+  )
+}
+
+const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  pending:   { label: '待处理', color: '#fa8c16' },
+  completed: { label: '已完成', color: '#52c41a' },
+  approved:  { label: '已批准', color: '#52c41a' },
+  rejected:  { label: '已拒绝', color: '#ff4d4f' },
+  processing:{ label: '处理中', color: '#1677ff' },
+}
+
+export default function WithdrawalsScreen() {
+  const { user } = useAuth()
+  const isPayer = canProcessPayments(user?.roleType || '')
+
+  const [rows,       setRows]       = useState<Withdrawal[]>([])
+  const [total,      setTotal]      = useState(0)
+  const [pendingCount, setPendingCount] = useState(0)
+  const [page,       setPage]       = useState(1)
+  const pageSize = 10
+  const [loading,    setLoading]    = useState(false)
+  const [status,     setStatus]     = useState('')  // default all
+  const [detail,     setDetail]     = useState<Withdrawal | null>(null)
+  const [payModal,   setPayModal]   = useState<Withdrawal | null>(null)
+  const [rejectModal,setRejectModal]= useState<Withdrawal | null>(null)
+  const [remark,     setRemark]     = useState('')
+  const [receiptFile,setReceiptFile]= useState<File | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [lightbox,   setLightbox]   = useState<string | null>(null)
+  const [flash,      setFlash]      = useState(false)
+  const [configFee,  setConfigFee]  = useState(50)  // fetched from system config
+  const prevPending = useRef(0)
+
+  // Fetch withdrawal fee from system config on mount
+  useEffect(() => {
+    getWithdrawalFee().then(setConfigFee).catch(() => {})
+  }, [])
+
+  const load = useCallback((p: number) => {
+    setLoading(true)
+    getWithdrawals({ pageNum: p, pageSize, status: status || undefined })
+      .then(r => { setRows(r.rows); setTotal(r.total) })
+      .finally(() => setLoading(false))
+  }, [pageSize, status])
+
+  useEffect(() => { load(1); setPage(1) }, [status]) // eslint-disable-line
+
+  // Poll pending count every 15s
+  useEffect(() => {
+    function check() {
+      client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
+        .then(r => {
+          const n = r.data.total || 0
+          setPendingCount(n)
+          if (n > prevPending.current && prevPending.current >= 0) {
+            setFlash(true); setTimeout(() => setFlash(false), 3000)
+          }
+          prevPending.current = n
+        }).catch(() => {})
+    }
+    check()
+    const t = setInterval(check, 15000)
+    return () => clearInterval(t)
+  }, [])
+
+  async function submitPay() {
+    if (!payModal) return
+    setSubmitting(true)
+    try {
+      let receiptUrl = ''
+      if (receiptFile) {
+        const fd = new FormData(); fd.append('file', receiptFile)
+        const res = await client.post('/common/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        receiptUrl = res.data.url || ''
+      }
+      await approveWithdrawal(payModal.id, remark)
+      // Update receipt image if uploaded
+      if (receiptUrl) {
+        await client.put('/tuka/withdrawal/audit', { id: payModal.id, status: 'completed', remark, receiptImage: receiptUrl })
+      }
+      setPayModal(null); setRemark(''); setReceiptFile(null)
+      load(page)
+      client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
+        .then(r => { const n = r.data.total || 0; setPendingCount(n); prevPending.current = n })
+    } catch (e: any) { alert(e.message) }
+    finally { setSubmitting(false) }
+  }
+
+  async function submitReject() {
+    if (!rejectModal) return
+    setSubmitting(true)
+    try {
+      await rejectWithdrawal(rejectModal.id, remark)
+      setRejectModal(null); setRemark('')
+      load(page)
+    } catch (e: any) { alert(e.message) }
+    finally { setSubmitting(false) }
+  }
+
+  const totalPages = Math.ceil(total / pageSize)
+  function goPage(p: number) { if (p < 1 || p > totalPages) return; setPage(p); load(p) }
+
+  return (
+    <div className="orders-root">
+      <div className="orders-toolbar">
+        <div className="toolbar-left">
+          <button className={'filter-pill' + (!status ? ' active' : '')} onClick={() => setStatus('')}>全部</button>
+          <button className={'filter-pill' + (status === 'pending' ? ' active-orange' : '')} onClick={() => setStatus('pending')}>待处理</button>
+          <button className={'filter-pill' + (status === 'completed' ? ' active' : '')} onClick={() => setStatus('completed')}>已完成</button>
+          <button className={'filter-pill' + (status === 'rejected' ? ' active' : '')} onClick={() => setStatus('rejected')}>已拒绝</button>
+          <button className="icon-btn-sm" onClick={() => load(page)} title="刷新">↻</button>
+        </div>
+        <div className="toolbar-right">
+          {isPayer && (
+            <button className={'pending-btn' + (flash ? ' flash' : '')} onClick={() => setStatus('pending')}>
+              待付款申请
+              {pendingCount > 0 && <span className={'pending-badge' + (flash ? ' flash' : '')}>{pendingCount}</span>}
+            </button>
+          )}
+          {!isPayer && (
+            <span className="role-badge">👁 只读模式 — 核销人员不可操作提现</span>
+          )}
+        </div>
+      </div>
+
+      <div className="orders-table-wrap">
+        <table className="orders-table">
+          <thead>
+            <tr>
+              <th>id</th><th>用户</th><th>提现单号</th><th>银行</th>
+              <th>账户名</th><th>账号</th><th>金额</th><th>手续费</th>
+              <th>状态</th><th>收据</th><th>创建时间</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={12} className="table-loading">加载中…</td></tr>}
+            {!loading && rows.length === 0 && <tr><td colSpan={12} className="table-empty">暂无数据</td></tr>}
+            {rows.map(r => {
+              const st = STATUS_MAP[r.status] || { label: r.status, color: '#999' }
+              return (
+                <tr key={r.id} className={r.status === 'pending' ? 'row-pending' : ''}>
+                  <td>{r.id}</td>
+                  <td>{r.username || r.userId}</td>
+                  <td className="mono">{r.withdrawNo}</td>
+                  <td>{r.bankName}</td>
+                  <td>{r.accountName}</td>
+                  <td className="mono">{r.accountNo}</td>
+                  <td className="amount-red">{fmtNgn(r.amount)}</td>
+                  <td>{fmtNgn(r.fee)}</td>
+                  <td><span style={{ color: st.color, fontWeight: 600 }}>● {st.label}</span></td>
+                  <td>
+                    {r.receiptImage
+                      ? <img src={r.receiptImage} className="receipt-thumb" alt="收据"
+                          onClick={() => setLightbox(r.receiptImage!)} />
+                      : <span className="no-img">—</span>
+                    }
+                  </td>
+                  <td>{r.createTime?.slice(0, 16)}</td>
+                  <td>
+                    <div className="action-btns">
+                      <button className="act-btn blue" onClick={() => setDetail(r)}>查看</button>
+                      {isPayer && r.status === 'pending' && (
+                        <>
+                          <button className="act-btn primary" onClick={() => { setPayModal(r); setRemark(''); setReceiptFile(null) }}>付款</button>
+                          <button className="act-btn danger"  onClick={() => { setRejectModal(r); setRemark('') }}>拒绝</button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="orders-pagination">
+        <span className="pg-total">共 {total} 条</span>
+        <button className="pg-btn" disabled={page <= 1} onClick={() => goPage(page - 1)}>‹</button>
+        {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map(p => (
+          <button key={p} className={'pg-btn' + (p === page ? ' current' : '')} onClick={() => goPage(p)}>{p}</button>
+        ))}
+        <button className="pg-btn" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>›</button>
+        <span className="pg-size">10 / page</span>
+      </div>
+
+      {/* Detail modal — all roles can view */}
+      {detail && (
+        <div className="modal-mask" onClick={() => setDetail(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-head"><span>提现详情</span><button onClick={() => setDetail(null)}>✕</button></div>
+            <div className="modal-body">
+              <div className="form-row"><label className="form-label">提现单号：</label><input className="form-input" readOnly value={detail.withdrawNo} /></div>
+              <div className="form-row"><label className="form-label">用户：</label><input className="form-input" readOnly value={String(detail.username || detail.userId)} /></div>
+              <div className="form-row"><label className="form-label">银行：</label><input className="form-input" readOnly value={detail.bankName} /></div>
+              <div className="form-row"><label className="form-label">账户名：</label><input className="form-input" readOnly value={detail.accountName} /></div>
+              <div className="form-row"><label className="form-label">账号：</label><input className="form-input" readOnly value={detail.accountNo} /></div>
+              <div className="form-row"><label className="form-label">金额：</label><input className="form-input" readOnly value={fmtNgn(detail.amount)} /></div>
+              <div className="form-row"><label className="form-label">手续费：</label><input className="form-input" readOnly value={fmtNgn(detail.fee)} /></div>
+              <div className="form-row"><label className="form-label">状态：</label><input className="form-input" readOnly value={STATUS_MAP[detail.status]?.label || detail.status} /></div>
+              {detail.remark && <div className="form-row"><label className="form-label">备注：</label><input className="form-input" readOnly value={detail.remark} /></div>}
+              <div className="form-row align-top">
+                <label className="form-label">付款收据：</label>
+                {detail.receiptImage
+                  ? <img src={detail.receiptImage} className="card-thumb" onClick={() => setLightbox(detail.receiptImage!)} alt="收据" />
+                  : <span className="no-img">暂无收据</span>
+                }
+              </div>
+              <div className="form-row"><label className="form-label">创建时间：</label><input className="form-input" readOnly value={detail.createTime} /></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {payModal && isPayer && (
+        <div className="modal-mask" onClick={() => { setPayModal(null); setReceiptFile(null) }}>
+          <div className="modal-box small" onClick={e => e.stopPropagation()}>
+            <div className="modal-head"><span>确认付款</span><button onClick={() => { setPayModal(null); setReceiptFile(null) }}>✕</button></div>
+            <div className="modal-body">
+
+              {/* Payment summary card */}
+              <div className="pay-summary">
+                <div className="pay-summary-row">
+                  <span>提现金额</span>
+                  <span className="amount-red">₦{payModal.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="pay-summary-row">
+                  <span>手续费（系统配置）</span>
+                  <span style={{ color: '#ff4d4f' }}>- ₦{configFee.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="pay-summary-divider" />
+                <div className="pay-summary-row total">
+                  <span>实际打款金额</span>
+                  <span className="pay-actual">₦{(payModal.amount - configFee).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              {/* Bank details with copy buttons */}
+              <div className="pay-bank-card">
+                <div className="pay-bank-title">收款信息</div>
+                <CopyRow label="银行名称" value={payModal.bankName} />
+                <CopyRow label="账户名"   value={payModal.accountName} />
+                <CopyRow label="账号"     value={payModal.accountNo} mono />
+              </div>
+
+              {/* Receipt upload */}
+              <div className="form-row align-top" style={{ marginTop: 12 }}>
+                <label className="form-label">付款收据：</label>
+                <label className="receipt-upload">
+                  {receiptFile ? (
+                    <div className="receipt-preview-wrap">
+                      <img src={URL.createObjectURL(receiptFile)} className="receipt-preview" alt="" />
+                      <button className="audit-img-remove" onClick={e => { e.preventDefault(); setReceiptFile(null) }}>✕</button>
+                    </div>
+                  ) : (
+                    <div className="audit-img-placeholder">
+                      <span className="audit-img-icon">🧾</span>
+                      <span>上传付款收据</span>
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) setReceiptFile(f); e.target.value = '' }} />
+                </label>
+              </div>
+
+              <textarea className="audit-remark" placeholder="备注（可选）" rows={2}
+                value={remark} onChange={e => setRemark(e.target.value)} />
+              <button className="audit-submit" onClick={submitPay} disabled={submitting}>
+                {submitting ? '提交中…' : `确认已付款 ₦${(payModal.amount - configFee).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject modal */}
+      {rejectModal && isPayer && (
+        <div className="modal-mask" onClick={() => setRejectModal(null)}>
+          <div className="modal-box small" onClick={e => e.stopPropagation()}>
+            <div className="modal-head"><span>拒绝提现</span><button onClick={() => setRejectModal(null)}>✕</button></div>
+            <div className="modal-body">
+              <div className="form-row"><label className="form-label">用户：</label><input className="form-input" readOnly value={String(rejectModal.username || rejectModal.userId)} /></div>
+              <div className="form-row"><label className="form-label">金额：</label><span className="amount-red" style={{ fontSize: 15, fontWeight: 700 }}>{fmtNgn(rejectModal.amount)}</span></div>
+              <textarea className="audit-remark" placeholder="拒绝原因（必填）" rows={3}
+                value={remark} onChange={e => setRemark(e.target.value)} />
+              <button className="audit-submit danger" onClick={submitReject} disabled={submitting || !remark.trim()}>
+                {submitting ? '提交中…' : '确认拒绝'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
+          <img src={lightbox} className="lightbox-img" alt="" onClick={e => e.stopPropagation()} />
+          <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,15 @@
+.status-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
+}
+
+.user-detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.udg-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid #f5f5f5;
+}
+.udg-label { font-size: 13px; color: #999; }
+.udg-value { font-size: 13px; color: #333; font-weight: 500; text-align: right; }
+.udg-value.mono { font-family: monospace; }

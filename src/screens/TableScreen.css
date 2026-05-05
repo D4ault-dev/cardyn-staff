@@ -1,0 +1,52 @@
+.ts-root { display:flex; flex-direction:column; height:100%; overflow:hidden; padding:0; }
+.ts-toolbar { display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:1px solid #334155; background:#1e293b; }
+.ts-title { font-size:18px; font-weight:800; color:#f1f5f9; margin:0; }
+.ts-filters { display:flex; align-items:center; gap:10px; }
+.ts-select { background:#0f172a; border:1px solid #334155; color:#94a3b8; border-radius:8px; padding:7px 12px; font-size:13px; }
+.ts-search { background:#0f172a; border:1px solid #334155; color:#f1f5f9; border-radius:8px; padding:7px 12px; font-size:13px; width:200px; outline:none; }
+.ts-search:focus { border-color:#22c55e; }
+.ts-btn { padding:7px 16px; border-radius:8px; border:none; background:#334155; color:#f1f5f9; font-size:13px; cursor:pointer; }
+.ts-btn:hover { background:#475569; }
+
+.ts-table-wrap { flex:1; overflow:auto; }
+.ts-loading { padding:24px; text-align:center; color:#475569; font-size:13px; }
+.ts-table { width:100%; border-collapse:collapse; font-size:13px; }
+.ts-table th { background:#1e293b; color:#64748b; font-weight:600; padding:10px 16px; text-align:left; border-bottom:1px solid #334155; position:sticky; top:0; }
+.ts-table td { padding:10px 16px; border-bottom:1px solid #1e293b; color:#cbd5e1; vertical-align:middle; }
+.ts-table tr:hover td { background:#1e293b; }
+.ts-empty { text-align:center; color:#475569; padding:32px !important; }
+.mono { font-family:monospace; font-size:12px; }
+.small { font-size:11px; color:#475569; }
+.green { color:#22c55e; font-weight:600; }
+.status-dot { font-weight:600; font-size:12px; }
+.row-btn { padding:5px 12px; border-radius:6px; border:none; background:#334155; color:#f1f5f9; font-size:12px; cursor:pointer; margin-right:4px; }
+.row-btn:hover { background:#475569; }
+.row-btn.accent { background:#22c55e20; color:#22c55e; }
+.row-btn.danger { background:#ef444420; color:#ef4444; }
+
+.ts-pagination { display:flex; align-items:center; justify-content:center; gap:16px; padding:12px 24px; border-top:1px solid #334155; background:#1e293b; }
+.pg-btn { padding:6px 16px; border-radius:8px; border:none; background:#334155; color:#f1f5f9; font-size:13px; cursor:pointer; }
+.pg-btn:disabled { opacity:.4; cursor:not-allowed; }
+.pg-info { font-size:13px; color:#64748b; }
+
+/* Modal */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:100; }
+.modal { background:#1e293b; border-radius:16px; width:520px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 24px 64px rgba(0,0,0,.6); }
+.modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #334155; font-size:15px; font-weight:700; color:#f1f5f9; }
+.modal-header button { background:none; border:none; color:#64748b; font-size:18px; cursor:pointer; }
+.modal-body { padding:20px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+.detail-row { display:flex; justify-content:space-between; align-items:flex-start; padding:6px 0; border-bottom:1px solid #0f172a; }
+.detail-label { font-size:13px; color:#64748b; }
+.detail-value { font-size:13px; color:#f1f5f9; font-weight:500; text-align:right; max-width:60%; word-break:break-all; }
+.modal-imgs { margin-top:8px; }
+.modal-label { font-size:12px; color:#64748b; margin-bottom:8px; }
+.img-row { display:flex; gap:8px; flex-wrap:wrap; }
+.modal-img { width:100px; height:100px; border-radius:8px; object-fit:cover; border:1px solid #334155; }
+.user-avatar { width:64px; height:64px; border-radius:50%; object-fit:cover; margin:0 auto 8px; display:block; }
+.audit-radios { display:flex; gap:10px; margin:8px 0; }
+.audit-radio { flex:1; padding:10px; border-radius:8px; border:2px solid #334155; color:#94a3b8; text-align:center; cursor:pointer; font-weight:600; font-size:14px; }
+.audit-radio.selected { border-color:#22c55e; color:#22c55e; background:#22c55e10; }
+.audit-radio.reject.selected { border-color:#ef4444; color:#ef4444; background:#ef444410; }
+.audit-remark { width:100%; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#f1f5f9; font-size:13px; padding:10px 12px; resize:none; outline:none; font-family:inherit; box-sizing:border-box; }
+.modal-submit { width:100%; padding:12px; border-radius:10px; border:none; background:#22c55e; color:#fff; font-size:14px; font-weight:700; cursor:pointer; margin-top:4px; }
+.modal-submit.danger { background:#ef4444; }

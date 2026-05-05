@@ -1,0 +1,67 @@
+.online-bar {
+  display: flex; align-items: center; gap: 24px;
+  padding: 6px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+  min-height: 44px;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.ob-section {
+  display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+}
+.ob-offline-section { opacity: 0.6; }
+
+.ob-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; color: #999;
+  white-space: nowrap; text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+.ob-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.ob-dot.online  { background: #22c55e; box-shadow: 0 0 6px #22c55e80; }
+.ob-dot.offline { background: #475569; }
+
+.ob-avatars {
+  display: flex; align-items: center; gap: 10px;
+}
+
+.ob-avatar-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  position: relative; cursor: default;
+}
+
+.ob-avatar {
+  width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+  border: 2px solid #334155;
+}
+.ob-avatar.offline { filter: grayscale(1); opacity: 0.5; }
+
+.ob-avatar-letter {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #fff;
+}
+
+.ob-status-dot {
+  position: absolute; bottom: 18px; right: -1px;
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 2px solid #1e293b;
+}
+.ob-status-dot.online  { background: #22c55e; }
+.ob-status-dot.offline { background: #475569; }
+
+.ob-name {
+  font-size: 10px; color: #666; white-space: nowrap;
+  max-width: 52px; overflow: hidden; text-overflow: ellipsis; text-align: center;
+}
+.ob-name.offline { color: #bbb; }
+
+.ob-you {
+  font-size: 9px; color: #22c55e; font-weight: 700;
+  background: #22c55e15; border-radius: 4px; padding: 1px 4px;
+}
+
+.ob-none { font-size: 12px; color: #475569; }
