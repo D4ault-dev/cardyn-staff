@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { canProcessPayments } from '../utils/roles'
 import { getWithdrawalFee } from '../api/config'
 import client from '../api/client'
+import DateRangePicker from '../components/DateRangePicker'
 import './OrdersScreen.css'
 import './WithdrawalsScreen.css'
 
@@ -48,6 +49,10 @@ export default function WithdrawalsScreen() {
   const pageSize = 10
   const [loading,    setLoading]    = useState(false)
   const [status,     setStatus]     = useState('')  // default all
+  const [startDate,  setStartDate]  = useState('')
+  const [endDate,    setEndDate]    = useState('')
+  const [startTime,  setStartTime]  = useState('')
+  const [endTime,    setEndTime]    = useState('')
   const [detail,     setDetail]     = useState<Withdrawal | null>(null)
   const [payModal,   setPayModal]   = useState<Withdrawal | null>(null)
   const [rejectModal,setRejectModal]= useState<Withdrawal | null>(null)
@@ -66,12 +71,17 @@ export default function WithdrawalsScreen() {
 
   const load = useCallback((p: number) => {
     setLoading(true)
-    getWithdrawals({ pageNum: p, pageSize, status: status || undefined })
+    getWithdrawals({
+      pageNum: p, pageSize,
+      status:    status    || undefined,
+      startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
+      endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
+    })
       .then(r => { setRows(r.rows); setTotal(r.total) })
       .finally(() => setLoading(false))
-  }, [pageSize, status])
+  }, [pageSize, status, startDate, endDate, startTime, endTime])
 
-  useEffect(() => { load(1); setPage(1) }, [status]) // eslint-disable-line
+  useEffect(() => { load(1); setPage(1) }, [status, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   // Poll pending count every 15s
   useEffect(() => {
@@ -136,6 +146,12 @@ export default function WithdrawalsScreen() {
           <button className={'filter-pill' + (status === 'pending' ? ' active-orange' : '')} onClick={() => setStatus('pending')}>待处理</button>
           <button className={'filter-pill' + (status === 'completed' ? ' active' : '')} onClick={() => setStatus('completed')}>已完成</button>
           <button className={'filter-pill' + (status === 'rejected' ? ' active' : '')} onClick={() => setStatus('rejected')}>已拒绝</button>
+          <DateRangePicker
+            startDate={startDate} endDate={endDate}
+            startTime={startTime} endTime={endTime}
+            onChange={(s, e, st, et) => { setStartDate(s); setEndDate(e); setStartTime(st); setEndTime(et) }}
+            onClear={() => { setStartDate(''); setEndDate(''); setStartTime(''); setEndTime('') }}
+          />
           <button className="icon-btn-sm" onClick={() => load(page)} title="刷新">↻</button>
         </div>
         <div className="toolbar-right">
@@ -161,7 +177,17 @@ export default function WithdrawalsScreen() {
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={12} className="table-loading">加载中…</td></tr>}
+            {loading && (
+              <>
+                {[1,2,3,4,5].map(k => (
+                  <tr key={k} className="skeleton-row">
+                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(c => (
+                      <td key={c}><div className="skeleton-cell" /></td>
+                    ))}
+                  </tr>
+                ))}
+              </>
+            )}
             {!loading && rows.length === 0 && <tr><td colSpan={12} className="table-empty">暂无数据</td></tr>}
             {rows.map(r => {
               const st = STATUS_MAP[r.status] || { label: r.status, color: '#999' }

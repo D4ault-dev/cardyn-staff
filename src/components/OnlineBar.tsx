@@ -38,8 +38,7 @@ export default function OnlineBar() {
                   </div>
               }
               <span className="ob-status-dot online" />
-              <span className="ob-name">{s.name}</span>
-              {s.userId === user?.userId && <span className="ob-you">you</span>}
+              {s.userId === user?.userId && <span className="ob-you-dot" />}
             </div>
           ))}
           {online.length === 0 && <span className="ob-none">No one online</span>}
@@ -62,7 +61,6 @@ export default function OnlineBar() {
                     </div>
                 }
                 <span className="ob-status-dot offline" />
-                <span className="ob-name offline">{s.name}</span>
               </div>
             ))}
           </div>

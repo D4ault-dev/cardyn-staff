@@ -31,8 +31,8 @@
     "wait-on": "^8.0.3"
   },
   "build": {
-    "appId": "com.tuka.staff",
-    "productName": "Tuka Staff",
+    "appId": "com.cardyn.staff",
+    "productName": "Cardyn Staff",
     "directories": {
       "output": "dist-electron"
     },
@@ -41,13 +41,20 @@
       "electron/**/*"
     ],
     "mac": {
-      "target": "dmg"
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "category": "public.app-category.business"
     },
     "win": {
-      "target": "nsis"
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
     },
     "linux": {
       "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icon.png",
+      "uninstallerIcon": "public/icon.png"
     }
   }
 }

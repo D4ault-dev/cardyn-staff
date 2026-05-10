@@ -5,6 +5,7 @@ import client from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { canVerifyOrders } from '../utils/roles'
 import { playSuccess, playError } from '../utils/sound'
+import DateRangePicker from '../components/DateRangePicker'
 import './OrdersScreen.css'
 
 // Currency/country code → display label (handles both "US" and "USD" formats)
@@ -68,6 +69,8 @@ export default function OrdersScreen() {
   const [orderNo,      setOrderNo]      = useState('')
   const [startDate,    setStartDate]    = useState('')  // date only: yyyy-MM-dd
   const [endDate,      setEndDate]      = useState('')
+  const [startTime,    setStartTime]    = useState('')  // HH:mm
+  const [endTime,      setEndTime]      = useState('')
   // Two separate modals matching the screenshots
   const [verifyData,   setVerifyData]   = useState<Order | null>(null)
   const [cardData,     setCardData]     = useState<Order | null>(null)
@@ -119,17 +122,18 @@ export default function OrdersScreen() {
       status:    status    || undefined,
       orderNo:   orderNo   || undefined,
       country:   country   || undefined,
-      startTime: startDate ? startDate + ' 00:00:00' : undefined,
-      endTime:   endDate   ? endDate   + ' 23:59:59' : undefined,
+      startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
+      endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
       .finally(() => setLoading(false))
-  }, [pageSize, status, orderNo, country, startDate, endDate])
+  }, [pageSize, status, orderNo, country, startDate, endDate, startTime, endTime])
 
-  useEffect(() => { load(1); setPage(1) }, [status, country, orderNo, startDate, endDate]) // eslint-disable-line
+  useEffect(() => { load(1); setPage(1) }, [status, country, orderNo, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   function reset() {
-    setStatus(''); setCountry(''); setOrderNo(''); setStartDate(''); setEndDate('')
+    setStatus(''); setCountry(''); setOrderNo('')
+    setStartDate(''); setEndDate(''); setStartTime(''); setEndTime('')
     setPage(1)
   }
 
@@ -223,18 +227,13 @@ export default function OrdersScreen() {
           <input className="filter-input-sm" placeholder="订单编号" value={orderNo}
             onChange={e => setOrderNo(e.target.value)} />
 
-          {/* Date range — two date inputs in one box */}
-          <div className="date-range-wrap">
-            <input className="date-input" type="date" value={startDate}
-              onChange={e => setStartDate(e.target.value)} />
-            <span className="date-sep-arrow">→</span>
-            <input className="date-input" type="date" value={endDate}
-              onChange={e => setEndDate(e.target.value)} />
-            <span className="date-cal-icon">📅</span>
-            {(startDate || endDate) && (
-              <button className="date-clear-btn" onClick={() => { setStartDate(''); setEndDate('') }}>✕</button>
-            )}
-          </div>
+          {/* Date range picker */}
+          <DateRangePicker
+            startDate={startDate} endDate={endDate}
+            startTime={startTime} endTime={endTime}
+            onChange={(s, e, st, et) => { setStartDate(s); setEndDate(e); setStartTime(st); setEndTime(et) }}
+            onClear={() => { setStartDate(''); setEndDate(''); setStartTime(''); setEndTime('') }}
+          />
 
           {/* Refresh + Reset */}
           <button className="icon-btn-sm" onClick={() => load(page)} title="刷新">↻</button>
@@ -273,7 +272,17 @@ export default function OrdersScreen() {
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={10} className="table-loading">加载中…</td></tr>}
+            {loading && (
+              <>
+                {[1,2,3,4,5].map(k => (
+                  <tr key={k} className="skeleton-row">
+                    {[1,2,3,4,5,6,7,8,9,10].map(c => (
+                      <td key={c}><div className="skeleton-cell" /></td>
+                    ))}
+                  </tr>
+                ))}
+              </>
+            )}
             {!loading && rows.length === 0 && <tr><td colSpan={10} className="table-empty">暂无数据</td></tr>}
             {rows.map(r => (
               <tr key={r.id} className={r.status === 'pending' ? 'row-pending' : ''}>

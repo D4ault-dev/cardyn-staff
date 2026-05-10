@@ -4,7 +4,7 @@
 .ts-filters { display:flex; align-items:center; gap:10px; }
 .ts-select { background:#0f172a; border:1px solid #334155; color:#94a3b8; border-radius:8px; padding:7px 12px; font-size:13px; }
 .ts-search { background:#0f172a; border:1px solid #334155; color:#f1f5f9; border-radius:8px; padding:7px 12px; font-size:13px; width:200px; outline:none; }
-.ts-search:focus { border-color:#22c55e; }
+.ts-search:focus { border-color:#00C2B4; }
 .ts-btn { padding:7px 16px; border-radius:8px; border:none; background:#334155; color:#f1f5f9; font-size:13px; cursor:pointer; }
 .ts-btn:hover { background:#475569; }
 
@@ -17,11 +17,11 @@
 .ts-empty { text-align:center; color:#475569; padding:32px !important; }
 .mono { font-family:monospace; font-size:12px; }
 .small { font-size:11px; color:#475569; }
-.green { color:#22c55e; font-weight:600; }
+.green { color:#00C2B4; font-weight:600; }
 .status-dot { font-weight:600; font-size:12px; }
 .row-btn { padding:5px 12px; border-radius:6px; border:none; background:#334155; color:#f1f5f9; font-size:12px; cursor:pointer; margin-right:4px; }
 .row-btn:hover { background:#475569; }
-.row-btn.accent { background:#22c55e20; color:#22c55e; }
+.row-btn.accent { background:#00C2B420; color:#00C2B4; }
 .row-btn.danger { background:#ef444420; color:#ef4444; }
 
 .ts-pagination { display:flex; align-items:center; justify-content:center; gap:16px; padding:12px 24px; border-top:1px solid #334155; background:#1e293b; }
@@ -45,8 +45,8 @@
 .user-avatar { width:64px; height:64px; border-radius:50%; object-fit:cover; margin:0 auto 8px; display:block; }
 .audit-radios { display:flex; gap:10px; margin:8px 0; }
 .audit-radio { flex:1; padding:10px; border-radius:8px; border:2px solid #334155; color:#94a3b8; text-align:center; cursor:pointer; font-weight:600; font-size:14px; }
-.audit-radio.selected { border-color:#22c55e; color:#22c55e; background:#22c55e10; }
+.audit-radio.selected { border-color:#00C2B4; color:#00C2B4; background:#00C2B410; }
 .audit-radio.reject.selected { border-color:#ef4444; color:#ef4444; background:#ef444410; }
 .audit-remark { width:100%; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#f1f5f9; font-size:13px; padding:10px 12px; resize:none; outline:none; font-family:inherit; box-sizing:border-box; }
-.modal-submit { width:100%; padding:12px; border-radius:10px; border:none; background:#22c55e; color:#fff; font-size:14px; font-weight:700; cursor:pointer; margin-top:4px; }
+.modal-submit { width:100%; padding:12px; border-radius:10px; border:none; background:#00C2B4; color:#fff; font-size:14px; font-weight:700; cursor:pointer; margin-top:4px; }
 .modal-submit.danger { background:#ef4444; }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { getUsers } from '../api/users'
 import type { AppUser } from '../types'
+import DateRangePicker from '../components/DateRangePicker'
 import './OrdersScreen.css'
 import './UsersScreen.css'
 
@@ -18,15 +19,24 @@ export default function UsersScreen() {
   const [loading, setLoading] = useState(false)
   const [search,  setSearch]  = useState('')
   const [detail,  setDetail]  = useState<AppUser | null>(null)
+  const [startDate, setStartDate] = useState('')
+  const [endDate,   setEndDate]   = useState('')
+  const [startTime, setStartTime] = useState('')
+  const [endTime,   setEndTime]   = useState('')
 
   const load = useCallback((p: number) => {
     setLoading(true)
-    getUsers({ pageNum: p, pageSize, phone: search || undefined })
+    getUsers({
+      pageNum: p, pageSize,
+      phone:     search    || undefined,
+      startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
+      endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
+    })
       .then(r => { setRows(r.rows); setTotal(r.total) })
       .finally(() => setLoading(false))
-  }, [pageSize, search])
+  }, [pageSize, search, startDate, endDate, startTime, endTime])
 
-  useEffect(() => { load(1); setPage(1) }, [search]) // eslint-disable-line
+  useEffect(() => { load(1); setPage(1) }, [search, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   const totalPages = Math.ceil(total / pageSize)
   function goPage(p: number) { if (p < 1 || p > totalPages) return; setPage(p); load(p) }
@@ -37,8 +47,14 @@ export default function UsersScreen() {
         <div className="toolbar-left">
           <input className="filter-input-sm" placeholder="手机号搜索" value={search}
             onChange={e => setSearch(e.target.value)} style={{ width: 180 }} />
+          <DateRangePicker
+            startDate={startDate} endDate={endDate}
+            startTime={startTime} endTime={endTime}
+            onChange={(s, e, st, et) => { setStartDate(s); setEndDate(e); setStartTime(st); setEndTime(et) }}
+            onClear={() => { setStartDate(''); setEndDate(''); setStartTime(''); setEndTime('') }}
+          />
           <button className="icon-btn-sm" onClick={() => load(page)} title="刷新">↻</button>
-          <button className="icon-btn-sm" onClick={() => setSearch('')} title="重置">✕</button>
+          <button className="icon-btn-sm" onClick={() => { setSearch(''); setStartDate(''); setEndDate(''); setStartTime(''); setEndTime('') }} title="重置">✕</button>
         </div>
         <div className="toolbar-right">
           <span style={{ fontSize: 13, color: '#666' }}>共 {total} 个用户</span>
@@ -63,7 +79,17 @@ export default function UsersScreen() {
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={11} className="table-loading">加载中…</td></tr>}
+            {loading && (
+              <>
+                {[1,2,3,4,5].map(k => (
+                  <tr key={k} className="skeleton-row">
+                    {[1,2,3,4,5,6,7,8,9,10,11].map(c => (
+                      <td key={c}><div className="skeleton-cell" /></td>
+                    ))}
+                  </tr>
+                ))}
+              </>
+            )}
             {!loading && rows.length === 0 && <tr><td colSpan={11} className="table-empty">暂无数据</td></tr>}
             {rows.map(r => (
               <tr key={r.id}>

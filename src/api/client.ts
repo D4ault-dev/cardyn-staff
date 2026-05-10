@@ -1,25 +1,17 @@
 import axios from 'axios'
 
-// ── IMPORTANT: Update this when your IP changes ──────────────────────────────
-const CODE_BASE_URL = 'http://74.48.115.175'
+// ── Base URL ──────────────────────────────────────────────────────────────────
+// Dev (localhost): empty string → Vite proxy handles routing to api.cardyn.net
+// Production (built Electron): full URL
+const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost'
 
-// User-saved override (set via ⚙ settings button) takes priority over code value
-// But we ALWAYS clear stale cached IPs that don't match the current code value
-const savedUrl = localStorage.getItem('tuka_base_url')
-// If saved URL looks like a different subnet/IP than code, clear it
-function isSameHost(a: string, b: string) {
-  try { return new URL(a).hostname === new URL(b).hostname } catch { return false }
-}
-if (savedUrl && !isSameHost(savedUrl, CODE_BASE_URL)) {
-  // Stale IP from old network — clear it so code value is used
-  localStorage.removeItem('tuka_base_url')
-}
-
-export let BASE_URL = localStorage.getItem('tuka_base_url') || CODE_BASE_URL
+// In dev, always use proxy (ignore any saved URL in localStorage)
+// In prod, use saved URL or fall back to production server
+export let BASE_URL = isDev ? '' : (localStorage.getItem('cardyn_base_url') || 'https://api.cardyn.net')
 
 export function setBaseUrl(url: string) {
   BASE_URL = url
-  localStorage.setItem('tuka_base_url', url)
+  localStorage.setItem('cardyn_base_url', url)
   client.defaults.baseURL = url
 }
 
@@ -30,16 +22,23 @@ const client = axios.create({
 })
 
 export function setAuthToken(token: string) {
-  localStorage.setItem('tuka_staff_token', token)
+  localStorage.setItem('cardyn_staff_token', token)
   client.defaults.headers.common['Authorization'] = `Bearer ${token}`
 }
 export function clearAuthToken() {
-  localStorage.removeItem('tuka_staff_token')
+  localStorage.removeItem('cardyn_staff_token')
   delete client.defaults.headers.common['Authorization']
 }
 export function restoreToken() {
-  const t = localStorage.getItem('tuka_staff_token')
-  if (t) client.defaults.headers.common['Authorization'] = `Bearer ${t}`
+  const t = localStorage.getItem('cardyn_staff_token')
+    || localStorage.getItem('tuka_staff_token')
+  if (t) {
+    client.defaults.headers.common['Authorization'] = `Bearer ${t}`
+    if (localStorage.getItem('tuka_staff_token')) {
+      localStorage.setItem('cardyn_staff_token', t)
+      localStorage.removeItem('tuka_staff_token')
+    }
+  }
   return t
 }
 
