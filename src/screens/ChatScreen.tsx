@@ -7,6 +7,7 @@ import type { ChatSession, ChatMessage, UserOrder } from '../types'
 import { useAuth } from '../context/AuthContext'
 import client from '../api/client'
 import { playNewMessage } from '../utils/sound'
+import { resolveUrl } from '../utils/resolveUrl'
 import './ChatScreen.css'
 
 type UserProfile = {
@@ -67,7 +68,7 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
 
   useEffect(() => {
     loadSessions()
-    const t = setInterval(loadSessions, 4000)  // refresh session list every 4s
+    const t = setInterval(loadSessions, 8000)  // refresh session list every 8s (was 4s)
     return () => clearInterval(t)
   }, [loadSessions])
 
@@ -115,7 +116,7 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
             return prev
           })
         }).catch(() => {})
-      }, 1500)
+      }, 2000)  // poll every 2s (was 1.5s) — still fast, 25% fewer requests
     }).finally(() => setLoadingMsg(false))
     getUserOrders(s.id).then(setOrders).catch(() => {})
     getUserProfile(s.id).then(p => { if (p) setProfile(p) }).catch(() => {})
@@ -335,7 +336,11 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
           <div className="chat-body">
             {/* Messages */}
             <div className="messages" ref={listRef}>
-              {loadingMsg && <div className="msg-loading">加载中…</div>}
+              {loadingMsg && (
+                <div className="msg-loading">
+                  <div className="spinner spinner-dark" style={{ width: 24, height: 24 }} />
+                </div>
+              )}
               {messages.map((m, idx) => {
                 // Date separator
                 const prevMsg = messages[idx - 1]
@@ -361,8 +366,8 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
                       <div className={'bubble' + (isAgent ? ' bubble-me' : ' bubble-user')}>
                         {!isAgent && <div className="bubble-name">{m.senderName}</div>}
                         {m.msgType === 'image'
-                          ? <img src={m.content} className="bubble-img" alt=""
-                              onClick={() => setLightbox(m.content)} />
+                          ? <img src={resolveUrl(m.content)} className="bubble-img" alt=""
+                              onClick={() => setLightbox(resolveUrl(m.content))} />
                           : <div className="bubble-text">{m.content}</div>
                         }
                         <div className="bubble-time">{formatMsgTime(m.createTime)}</div>
@@ -430,7 +435,7 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
                   <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
                 </label>
                 <button className="send-btn" onClick={handleSend} disabled={!input.trim() || sending}>
-                  {sending ? '…' : '发送'}
+                  {sending ? <span className="spinner-sm" /> : '发送'}
                 </button>
               </div>
             </div>

@@ -26,19 +26,37 @@ export default function LoginScreen() {
     <div className="login-root">
       <div className="login-card">
         <div className="login-logo">
-          <img src="/icon.png" alt="logo" style={{ width: 36, height: 36, borderRadius: 8 }} onError={(e) => { e.currentTarget.style.display='none' }} />
+          <img src="/icon.png" alt="logo" style={{ width: 36, height: 36, borderRadius: 8 }}
+            onError={(e) => { e.currentTarget.style.display='none' }} />
           <span className="logo-text">Cardyn Staff</span>
         </div>
         <p className="login-sub">Customer Service Dashboard</p>
 
         <form onSubmit={handleLogin} className="login-form">
-          <input className="login-input" placeholder="Username" value={username}
-            onChange={e => setUsername(e.target.value)} autoFocus />
-          <input className="login-input" type="password" placeholder="Password" value={password}
-            onChange={e => setPassword(e.target.value)} />
+          <input
+            className="login-input"
+            placeholder="Username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            autoFocus
+            disabled={loading}
+          />
+          <input
+            className="login-input"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            disabled={loading}
+          />
           {error && <div className="login-error">{error}</div>}
           <button className="login-btn" type="submit" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? (
+              <span className="login-btn-inner">
+                <span className="spinner-sm" />
+                Signing in…
+              </span>
+            ) : 'Sign In'}
           </button>
         </form>
       </div>

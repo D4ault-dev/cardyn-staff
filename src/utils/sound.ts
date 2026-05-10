@@ -1,11 +1,10 @@
 // ── Sound notification engine ─────────────────────────────────────────────────
-// Uses Web Audio API — no external files needed, works offline
+// Uses Web Audio API for synth sounds + HTML Audio for real sound files
 
 let ctx: AudioContext | null = null
 
 function getCtx(): AudioContext {
   if (!ctx) ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-  // Resume if suspended (browser autoplay policy)
   if (ctx.state === 'suspended') ctx.resume()
   return ctx
 }
@@ -24,6 +23,17 @@ function tone(freq: number, duration: number, volume = 0.4, type: OscillatorType
   osc.stop(c.currentTime + duration)
 }
 
+// Pre-load the bell audio so it plays instantly
+let _bellAudio: HTMLAudioElement | null = null
+function getBell(): HTMLAudioElement {
+  if (!_bellAudio) {
+    _bellAudio = new Audio('/order-bell.mp3')
+    _bellAudio.volume = 0.8
+    _bellAudio.load()
+  }
+  return _bellAudio
+}
+
 // 🔔 New chat — urgent double-beep (loud)
 export function playNewChat() {
   tone(880, 0.15, 0.6, 'square')
@@ -32,11 +42,22 @@ export function playNewChat() {
   setTimeout(() => tone(1100, 0.25, 0.5, 'square'), 560)
 }
 
-// 📦 New order — triple ascending beep
+// 📦 New order — restaurant bell sound
 export function playNewOrder() {
-  tone(660, 0.12, 0.5, 'sine')
-  setTimeout(() => tone(880, 0.12, 0.5, 'sine'), 150)
-  setTimeout(() => tone(1100, 0.2,  0.5, 'sine'), 300)
+  try {
+    const bell = getBell()
+    bell.currentTime = 0
+    bell.play().catch(() => {
+      // Fallback to synth if autoplay blocked
+      tone(660, 0.12, 0.5, 'sine')
+      setTimeout(() => tone(880, 0.12, 0.5, 'sine'), 150)
+      setTimeout(() => tone(1100, 0.2,  0.5, 'sine'), 300)
+    })
+  } catch {
+    tone(660, 0.12, 0.5, 'sine')
+    setTimeout(() => tone(880, 0.12, 0.5, 'sine'), 150)
+    setTimeout(() => tone(1100, 0.2,  0.5, 'sine'), 300)
+  }
 }
 
 // 💬 New message in active chat — soft single ping

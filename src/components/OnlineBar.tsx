@@ -14,7 +14,7 @@ export default function OnlineBar() {
 
   useEffect(() => {
     refresh()
-    const t = setInterval(refresh, 15000) // refresh every 15s
+    const t = setInterval(refresh, 30000) // refresh every 30s (was 15s)
     return () => clearInterval(t)
   }, [refresh])
 

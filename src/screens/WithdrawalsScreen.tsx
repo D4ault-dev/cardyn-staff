@@ -6,6 +6,8 @@ import { canProcessPayments } from '../utils/roles'
 import { getWithdrawalFee } from '../api/config'
 import client from '../api/client'
 import DateRangePicker from '../components/DateRangePicker'
+import Img from '../components/Img'
+import { resolveUrl } from '../utils/resolveUrl'
 import './OrdersScreen.css'
 import './WithdrawalsScreen.css'
 
@@ -83,7 +85,7 @@ export default function WithdrawalsScreen() {
 
   useEffect(() => { load(1); setPage(1) }, [status, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
-  // Poll pending count every 15s
+  // Poll pending count every 30s — useChatNotifications handles real-time alerts
   useEffect(() => {
     function check() {
       client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
@@ -97,7 +99,7 @@ export default function WithdrawalsScreen() {
         }).catch(() => {})
     }
     check()
-    const t = setInterval(check, 15000)
+    const t = setInterval(check, 30000)
     return () => clearInterval(t)
   }, [])
 
@@ -204,8 +206,9 @@ export default function WithdrawalsScreen() {
                   <td><span style={{ color: st.color, fontWeight: 600 }}>● {st.label}</span></td>
                   <td>
                     {r.receiptImage
-                      ? <img src={r.receiptImage} className="receipt-thumb" alt="收据"
-                          onClick={() => setLightbox(r.receiptImage!)} />
+                      ? <Img src={resolveUrl(r.receiptImage)} className="receipt-thumb" alt="收据"
+                          onClick={() => setLightbox(resolveUrl(r.receiptImage))}
+                          style={{ width: 40, height: 40 }} />
                       : <span className="no-img">—</span>
                     }
                   </td>
@@ -256,7 +259,9 @@ export default function WithdrawalsScreen() {
               <div className="form-row align-top">
                 <label className="form-label">付款收据：</label>
                 {detail.receiptImage
-                  ? <img src={detail.receiptImage} className="card-thumb" onClick={() => setLightbox(detail.receiptImage!)} alt="收据" />
+                  ? <Img src={resolveUrl(detail.receiptImage)} className="card-thumb"
+                      onClick={() => setLightbox(resolveUrl(detail.receiptImage))} alt="收据"
+                      style={{ width: 100, height: 100 }} />
                   : <span className="no-img">暂无收据</span>
                 }
               </div>

@@ -67,7 +67,12 @@ function Shell() {
     // For order/withdrawal, navigation handled by NavLink click
   }
 
-  if (loading) return <div className="app-loading">加载中…</div>
+  if (loading) return (
+    <div className="app-loading">
+      <div className="spinner" />
+      <span className="app-loading-text">Loading Cardyn Staff…</span>
+    </div>
+  )
   if (!user)   return <LoginScreen />
 
   return (

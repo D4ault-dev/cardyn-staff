@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext'
 import { canVerifyOrders } from '../utils/roles'
 import { playSuccess, playError } from '../utils/sound'
 import DateRangePicker from '../components/DateRangePicker'
+import Img from '../components/Img'
+import { resolveUrl } from '../utils/resolveUrl'
 import './OrdersScreen.css'
 
 // Currency/country code → display label (handles both "US" and "USD" formats)
@@ -96,7 +98,7 @@ export default function OrdersScreen() {
       .catch(() => {})
   }, [])
 
-  // Poll pending count every 15s — flash badge when new orders arrive
+  // Poll pending count every 30s — useChatNotifications handles real-time alerts
   useEffect(() => {
     function checkPending() {
       client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
@@ -111,7 +113,7 @@ export default function OrdersScreen() {
         }).catch(() => {})
     }
     checkPending()
-    pendingTimer.current = setInterval(checkPending, 15000)
+    pendingTimer.current = setInterval(checkPending, 30000)
     return () => { if (pendingTimer.current) clearInterval(pendingTimer.current) }
   }, [])
 
@@ -410,8 +412,9 @@ export default function OrdersScreen() {
               <div className="form-row align-top">
                 <label className="form-label">核销凭证：</label>
                 {verifyData.verifyImage ? (
-                  <img src={verifyData.verifyImage} className="verify-thumb"
-                    onClick={() => setLightbox(verifyData.verifyImage!)} alt="凭证" />
+                  <Img src={resolveUrl(verifyData.verifyImage)} className="verify-thumb"
+                    onClick={() => setLightbox(resolveUrl(verifyData.verifyImage))} alt="凭证"
+                    style={{ width: 80, height: 80 }} />
                 ) : (
                   <div className="verify-thumb-empty">暂无凭证</div>
                 )}
@@ -495,8 +498,9 @@ export default function OrdersScreen() {
                 <div className="card-imgs-row">
                   {cardData.cardImage
                     ? cardData.cardImage.split(',').map((u, i) => (
-                        <img key={i} src={u.trim()} className="card-thumb"
-                          onClick={() => setLightbox(u.trim())} alt="" />
+                        <Img key={i} src={resolveUrl(u.trim())} className="card-thumb"
+                          onClick={() => setLightbox(resolveUrl(u.trim()))} alt=""
+                          style={{ width: 100, height: 100 }} />
                       ))
                     : <span className="no-img">暂无图片</span>
                   }
@@ -507,8 +511,9 @@ export default function OrdersScreen() {
               <div className="form-row align-top">
                 <label className="form-label">收据：</label>
                 {cardData.verifyImage ? (
-                  <img src={cardData.verifyImage} className="card-thumb"
-                    onClick={() => setLightbox(cardData.verifyImage!)} alt="收据" />
+                  <Img src={resolveUrl(cardData.verifyImage)} className="card-thumb"
+                    onClick={() => setLightbox(resolveUrl(cardData.verifyImage))} alt="收据"
+                    style={{ width: 100, height: 100 }} />
                 ) : (
                   <span className="no-img">暂无收据</span>
                 )}

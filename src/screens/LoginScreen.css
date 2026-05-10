@@ -25,4 +25,7 @@
   cursor: pointer; transition: background .2s; margin-top: 4px;
 }
 .login-btn:hover:not(:disabled) { background: #009E92; }
-.login-btn:disabled { opacity: .5; cursor: not-allowed; }
+.login-btn:disabled { opacity: .7; cursor: not-allowed; }
+.login-btn-inner {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
