@@ -9,7 +9,7 @@
     "dev": "concurrently \"vite --port 5173\" \"wait-on http://localhost:5173 && electron .\"",
     "web": "vite --port 5173",
     "build": "tsc -b && vite build",
-    "electron:build": "npm run build && electron-builder",
+    "electron:build": "npm run build && electron-builder --publish never",
     "preview": "vite preview"
   },
   "dependencies": {
