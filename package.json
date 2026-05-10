@@ -2,6 +2,8 @@
   "name": "staff-desktop",
   "private": true,
   "version": "1.0.0",
+  "description": "Cardyn Staff Customer Service Dashboard",
+  "author": "Cardyn",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently \"vite --port 5173\" \"wait-on http://localhost:5173 && electron .\"",
@@ -52,9 +54,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "public/icon.png",
-      "uninstallerIcon": "public/icon.png"
+      "allowToChangeInstallationDirectory": true
     }
   }
 }
