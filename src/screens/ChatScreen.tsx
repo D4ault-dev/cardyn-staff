@@ -116,7 +116,7 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
             return prev
           })
         }).catch(() => {})
-      }, 2000)  // poll every 2s (was 1.5s) — still fast, 25% fewer requests
+      }, 1500)  // poll every 1.5s — matches app poller for consistent latency
     }).finally(() => setLoadingMsg(false))
     getUserOrders(s.id).then(setOrders).catch(() => {})
     getUserProfile(s.id).then(p => { if (p) setProfile(p) }).catch(() => {})
