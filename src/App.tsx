@@ -8,6 +8,7 @@ import OnlineBar from './components/OnlineBar'
 import ChatToast from './components/ChatToast'
 import type { ToastItem } from './components/ChatToast'
 import LoginScreen from './screens/LoginScreen'
+import DashboardScreen from './screens/DashboardScreen'
 import ChatScreen from './screens/ChatScreen'
 import OrdersScreen from './screens/OrdersScreen'
 import WithdrawalsScreen from './screens/WithdrawalsScreen'
@@ -80,6 +81,7 @@ function Shell() {
       {/* Top navigation bar — matches screenshot */}
       <div className="top-nav">
         <div className="top-nav-left">
+          <NavLink to="/dashboard"   className={({ isActive }) => 'tab-btn' + (isActive ? ' active' : '')}>数据概览</NavLink>
           <NavLink to="/chat"        className={({ isActive }) => 'tab-btn' + (isActive ? ' active' : '')}>
             客服中心{unread > 0 && <span className="tab-badge">{unread > 99 ? '99+' : unread}</span>}
           </NavLink>
@@ -108,7 +110,8 @@ function Shell() {
       {/* Main content */}
       <main className="app-main">
         <Routes>
-          <Route path="/"            element={<Navigate to="/orders" replace />} />
+          <Route path="/"            element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard"   element={<DashboardScreen />} />
           <Route path="/chat"        element={<ChatScreen onUnreadChange={setUnread} autoOpenSessionId={pendingChatId} onAutoOpenDone={() => setPendingChatId(null)} />} />
           <Route path="/orders"      element={<OrdersScreen />} />
           <Route path="/withdrawals" element={<WithdrawalsScreen />} />
