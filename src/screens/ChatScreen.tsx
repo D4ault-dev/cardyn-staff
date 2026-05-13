@@ -67,8 +67,8 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
 
     ws.onMessage = (frame) => {
       if (frame.type === 'message') {
-        const msg = frame.data as ChatMessage
-        const sid = msg.sessionId ?? (msg as any).session_id
+        const msg = frame.data as ChatMessage & { sessionId?: number; session_id?: number }
+        const sid = msg.sessionId ?? msg.session_id
         // Only append if this message belongs to the currently open session
         setActive(prev => {
           if (!prev || prev.id !== sid) return prev

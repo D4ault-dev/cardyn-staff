@@ -48,7 +48,7 @@ const STATUS_LABELS: Record<string, string> = {
 const PIE_COLORS = ['#52c41a', '#fa8c16', '#1677ff', '#ff4d4f', '#722ed1', '#13c2c2']
 
 // ── KPI Icons (pure SVG — no emoji) ──────────────────────────────────────────
-const ICONS: Record<string, JSX.Element> = {
+const ICONS: Record<string, React.ReactElement> = {
   orders: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
       <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
@@ -72,7 +72,6 @@ const ICONS: Record<string, JSX.Element> = {
   ),
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, color, icon }: {
   label: string; value: string; sub?: string; color: string; icon: keyof typeof ICONS
 }) {
