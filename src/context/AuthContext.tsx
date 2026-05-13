@@ -3,15 +3,19 @@ import { restoreToken, clearAuthToken } from '../api/client'
 import client from '../api/client'
 import type { StaffUser } from '../types'
 
-type AuthCtx = {
+type AuthCtxType = {
   user: StaffUser | null
   setUser: (u: StaffUser | null) => void
   logout: () => void
   loading: boolean
 }
 
-const Ctx = createContext<AuthCtx>({} as AuthCtx)
-export const useAuth = () => useContext(Ctx)
+// Export the context so useAuth.ts can import it
+export const AuthCtx = createContext<AuthCtxType>({} as AuthCtxType)
+
+// Keep useAuth here as well for backwards compat — but the canonical import
+// should be from './useAuth' to satisfy Fast Refresh rules
+export const useAuth = () => useContext(AuthCtx)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser]       = useState<StaffUser | null>(null)
@@ -43,5 +47,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   function logout() { clearAuthToken(); setUser(null) }
 
-  return <Ctx.Provider value={{ user, setUser, logout, loading }}>{children}</Ctx.Provider>
+  return <AuthCtx.Provider value={{ user, setUser, logout, loading }}>{children}</AuthCtx.Provider>
 }

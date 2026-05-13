@@ -17,6 +17,7 @@ export default function UsersScreen() {
   const [page,    setPage]    = useState(1)
   const pageSize = 10
   const [loading, setLoading] = useState(false)
+  const [firstLoad, setFirstLoad] = useState(true)
   const [search,  setSearch]  = useState('')
   const [detail,  setDetail]  = useState<AppUser | null>(null)
   const [startDate, setStartDate] = useState('')
@@ -26,14 +27,17 @@ export default function UsersScreen() {
 
   const load = useCallback((p: number) => {
     setLoading(true)
-    getUsers({
+    const params = {
       pageNum: p, pageSize,
       phone:     search    || undefined,
       startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
       endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
+    }
+    getUsers(params, {
+      onFresh: r => { setRows(r.rows); setTotal(r.total) },
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setFirstLoad(false) })
   }, [pageSize, search, startDate, endDate, startTime, endTime])
 
   useEffect(() => { load(1); setPage(1) }, [search, startDate, endDate, startTime, endTime]) // eslint-disable-line
@@ -79,7 +83,7 @@ export default function UsersScreen() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
+            {(loading && firstLoad) && (
               <>
                 {[1,2,3,4,5].map(k => (
                   <tr key={k} className="skeleton-row">
@@ -90,8 +94,8 @@ export default function UsersScreen() {
                 ))}
               </>
             )}
-            {!loading && rows.length === 0 && <tr><td colSpan={11} className="table-empty">暂无数据</td></tr>}
-            {rows.map(r => (
+            {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={11} className="table-empty">暂无数据</td></tr>}
+            {!(loading && firstLoad) && rows.map(r => (
               <tr key={r.id}>
                 <td>{r.id}</td>
                 <td className="mono">{r.phone}</td>

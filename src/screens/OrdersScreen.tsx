@@ -65,6 +65,7 @@ export default function OrdersScreen() {
   const [page,         setPage]         = useState(1)
   const pageSize = 10
   const [loading,      setLoading]      = useState(false)
+  const [firstLoad,    setFirstLoad]    = useState(true)
   const [countries,    setCountries]    = useState<string[]>([])
   const [country,      setCountry]      = useState('')
   const [status,       setStatus]       = useState('')  // default all
@@ -128,7 +129,7 @@ export default function OrdersScreen() {
       endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setFirstLoad(false) })
   }, [pageSize, status, orderNo, country, startDate, endDate, startTime, endTime])
 
   useEffect(() => { load(1); setPage(1) }, [status, country, orderNo, startDate, endDate, startTime, endTime]) // eslint-disable-line
@@ -274,7 +275,7 @@ export default function OrdersScreen() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
+            {(loading && firstLoad) && (
               <>
                 {[1,2,3,4,5].map(k => (
                   <tr key={k} className="skeleton-row">
@@ -285,8 +286,8 @@ export default function OrdersScreen() {
                 ))}
               </>
             )}
-            {!loading && rows.length === 0 && <tr><td colSpan={10} className="table-empty">暂无数据</td></tr>}
-            {rows.map(r => (
+            {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={10} className="table-empty">暂无数据</td></tr>}
+            {!(loading && firstLoad) && rows.map(r => (
               <tr key={r.id} className={r.status === 'pending' ? 'row-pending' : ''}>
                 <td>{r.id}</td>
                 <td>{r.userId}</td>
@@ -576,7 +577,7 @@ export default function OrdersScreen() {
                     </div>
                   ) : (
                     <div className="audit-img-placeholder">
-                      <span className="audit-img-icon">🖼</span>
+                      <span className="audit-img-icon">[ IMG ]</span>
                       <span>点击上传图片</span>
                     </div>
                   )}
@@ -611,7 +612,7 @@ export default function OrdersScreen() {
             <div className="pp-cards-wrap">
               {pendingRows.length === 0 ? (
                 <div className="pp-empty-card">
-                  <div className="pp-empty-icon">📭</div>
+                  <div className="pp-empty-icon">—</div>
                   <div className="pp-empty-title">暂无待受理订单</div>
                   <div className="pp-empty-sub">所有订单已处理完毕</div>
                 </div>

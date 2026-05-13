@@ -411,6 +411,7 @@
   background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 600px 100%;
   animation: shimmer 1.4s infinite linear;
+  will-change: background-position;
 }
 
 /* Vary widths so it looks natural */
@@ -431,3 +432,86 @@
 .skeleton-row:nth-child(3) .skeleton-cell { animation-delay: 0.2s; }
 .skeleton-row:nth-child(4) .skeleton-cell { animation-delay: 0.3s; }
 .skeleton-row:nth-child(5) .skeleton-cell { animation-delay: 0.4s; }
+
+/* ── Responsive: wrap toolbar on small screens ── */
+@media (max-width: 900px) {
+  .orders-toolbar { flex-direction: column; align-items: flex-start; }
+  .toolbar-left   { flex-wrap: wrap; }
+  .toolbar-right  { width: 100%; justify-content: flex-end; }
+}
+
+/* ── Responsive: horizontal scroll for table on small screens ── */
+@media (max-width: 768px) {
+  .orders-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .orders-table { min-width: 700px; }
+  .modal-box.wide { width: 96vw; }
+  .modal-box      { width: 96vw; }
+  .pending-popup-large { width: 96vw; }
+  .pp-cards-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Copy button ── */
+.copy-btn {
+  padding: 3px 10px; border-radius: 4px; border: 1px solid #d9d9d9;
+  background: #fff; color: #555; font-size: 12px; cursor: pointer;
+  transition: all .15s; white-space: nowrap; flex-shrink: 0;
+}
+.copy-btn:hover  { border-color: #1677ff; color: #1677ff; }
+.copy-btn.copied { background: #52c41a; border-color: #52c41a; color: #fff; }
+
+/* ── Role badge ── */
+.role-badge {
+  font-size: 12px; color: #999; padding: 4px 10px;
+  border: 1px solid #e8e8e8; border-radius: 4px; background: #fafafa;
+}
+
+/* ── User detail grid ── */
+.user-detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.udg-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px; background: #fafafa; border-radius: 6px;
+  border: 1px solid #f0f0f0;
+}
+.udg-label { font-size: 11px; color: #999; }
+.udg-value { font-size: 13px; font-weight: 600; color: #333; word-break: break-all; }
+
+/* ── Status pill ── */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
+}
+
+/* ── Withdrawals: pay summary ── */
+.pay-summary {
+  background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px;
+  padding: 14px 16px; margin-bottom: 12px;
+}
+.pay-summary-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; color: #555; padding: 4px 0;
+}
+.pay-summary-row.total { font-size: 15px; font-weight: 700; color: #111; padding-top: 8px; }
+.pay-summary-divider { border-top: 1px dashed #e8e8e8; margin: 6px 0; }
+.pay-actual { color: #ff4d4f; font-size: 18px; font-weight: 800; }
+
+/* ── Withdrawals: bank card ── */
+.pay-bank-card {
+  background: #fff; border: 1px solid #e8e8e8; border-radius: 8px;
+  padding: 12px 16px; margin-bottom: 8px;
+}
+.pay-bank-title { font-size: 12px; font-weight: 700; color: #999; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.copy-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+.copy-row:last-child { border-bottom: none; }
+.copy-label  { font-size: 12px; color: #999; min-width: 60px; }
+.copy-value  { flex: 1; font-size: 13px; color: #333; font-weight: 500; word-break: break-all; }
+
+/* ── Receipt upload ── */
+.receipt-upload { display: block; cursor: pointer; }
+.receipt-preview-wrap { position: relative; display: inline-block; }
+.receipt-preview { width: 120px; height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid #e8e8e8; display: block; }
+.receipt-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #e8e8e8; cursor: zoom-in; }

@@ -50,6 +50,7 @@ export default function WithdrawalsScreen() {
   const [page,       setPage]       = useState(1)
   const pageSize = 10
   const [loading,    setLoading]    = useState(false)
+  const [firstLoad,  setFirstLoad]  = useState(true)
   const [status,     setStatus]     = useState('')  // default all
   const [startDate,  setStartDate]  = useState('')
   const [endDate,    setEndDate]    = useState('')
@@ -73,14 +74,17 @@ export default function WithdrawalsScreen() {
 
   const load = useCallback((p: number) => {
     setLoading(true)
-    getWithdrawals({
+    const params = {
       pageNum: p, pageSize,
       status:    status    || undefined,
       startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
       endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
+    }
+    getWithdrawals(params, {
+      onFresh: r => { setRows(r.rows); setTotal(r.total) },
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setFirstLoad(false) })
   }, [pageSize, status, startDate, endDate, startTime, endTime])
 
   useEffect(() => { load(1); setPage(1) }, [status, startDate, endDate, startTime, endTime]) // eslint-disable-line
@@ -164,7 +168,7 @@ export default function WithdrawalsScreen() {
             </button>
           )}
           {!isPayer && (
-            <span className="role-badge">👁 只读模式 — 核销人员不可操作提现</span>
+            <span className="role-badge">只读模式 — 核销人员不可操作提现</span>
           )}
         </div>
       </div>
@@ -179,7 +183,7 @@ export default function WithdrawalsScreen() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
+            {(loading && firstLoad) && (
               <>
                 {[1,2,3,4,5].map(k => (
                   <tr key={k} className="skeleton-row">
@@ -190,8 +194,8 @@ export default function WithdrawalsScreen() {
                 ))}
               </>
             )}
-            {!loading && rows.length === 0 && <tr><td colSpan={12} className="table-empty">暂无数据</td></tr>}
-            {rows.map(r => {
+            {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={12} className="table-empty">暂无数据</td></tr>}
+            {!(loading && firstLoad) && rows.map(r => {
               const st = STATUS_MAP[r.status] || { label: r.status, color: '#999' }
               return (
                 <tr key={r.id} className={r.status === 'pending' ? 'row-pending' : ''}>
@@ -313,7 +317,7 @@ export default function WithdrawalsScreen() {
                     </div>
                   ) : (
                     <div className="audit-img-placeholder">
-                      <span className="audit-img-icon">🧾</span>
+                      <span className="audit-img-icon">[ RCP ]</span>
                       <span>上传付款收据</span>
                     </div>
                   )}

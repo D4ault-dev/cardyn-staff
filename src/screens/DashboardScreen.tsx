@@ -47,13 +47,38 @@ const STATUS_LABELS: Record<string, string> = {
 }
 const PIE_COLORS = ['#52c41a', '#fa8c16', '#1677ff', '#ff4d4f', '#722ed1', '#13c2c2']
 
+// ── KPI Icons (pure SVG — no emoji) ──────────────────────────────────────────
+const ICONS: Record<string, JSX.Element> = {
+  orders: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
+      <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+    </svg>
+  ),
+  revenue: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
+      <circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9 9h4a2 2 0 0 1 0 4H9m0 0h6"/>
+    </svg>
+  ),
+  users: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  ),
+  withdraw: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
+      <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+    </svg>
+  ),
+}
+
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, color, icon }: {
-  label: string; value: string; sub?: string; color: string; icon: string
+  label: string; value: string; sub?: string; color: string; icon: keyof typeof ICONS
 }) {
   return (
     <div className="kpi-card" style={{ borderTop: `3px solid ${color}` }}>
-      <div className="kpi-icon" style={{ background: color + '18', color }}>{icon}</div>
+      <div className="kpi-icon" style={{ background: color + '18', color }}>{ICONS[icon]}</div>
       <div className="kpi-body">
         <div className="kpi-value" style={{ color }}>{value}</div>
         <div className="kpi-label">{label}</div>
@@ -87,6 +112,7 @@ export default function DashboardScreen() {
   const [topCards, setTopCards] = useState<CardRow[]>([])
   const [hourly,   setHourly]   = useState<HourlyRow[]>([])
   const [loading,  setLoading]  = useState(true)
+  const [firstLoad, setFirstLoad] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   const load = useCallback(async () => {
@@ -106,7 +132,7 @@ export default function DashboardScreen() {
       setHourly(h.data.data || [])
       setLastRefresh(new Date())
     } catch { /* keep existing */ }
-    finally { setLoading(false) }
+    finally { setLoading(false); setFirstLoad(false) }
   }, [])
 
   useEffect(() => {
@@ -138,10 +164,10 @@ export default function DashboardScreen() {
 
       {/* KPI Cards */}
       <div className="kpi-grid">
-        <KpiCard label="今日订单"     value={String(stats?.todayOrders ?? '—')}    color="#1677ff" icon="📦" sub={`待处理 ${stats?.pendingOrders ?? 0}`} />
-        <KpiCard label="今日收入"     value={fmtNgn(stats?.todayRevenue ?? 0)}     color="#52c41a" icon="💰" sub={`总收入 ${fmtNgn(stats?.totalRevenue ?? 0)}`} />
-        <KpiCard label="今日新用户"   value={String(stats?.todayUsers ?? '—')}     color="#722ed1" icon="👤" sub={`总用户 ${stats?.totalUsers ?? 0}`} />
-        <KpiCard label="待处理提现"   value={String(stats?.pendingWithdrawals ?? '—')} color="#fa8c16" icon="🏦" sub={fmtNgn(stats?.pendingWithdrawalAmount ?? 0)} />
+        <KpiCard label="今日订单"     value={String(stats?.todayOrders ?? '—')}    color="#1677ff" icon="orders"   sub={`待处理 ${stats?.pendingOrders ?? 0}`} />
+        <KpiCard label="今日收入"     value={fmtNgn(stats?.todayRevenue ?? 0)}     color="#52c41a" icon="revenue"  sub={`总收入 ${fmtNgn(stats?.totalRevenue ?? 0)}`} />
+        <KpiCard label="今日新用户"   value={String(stats?.todayUsers ?? '—')}     color="#722ed1" icon="users"    sub={`总用户 ${stats?.totalUsers ?? 0}`} />
+        <KpiCard label="待处理提现"   value={String(stats?.pendingWithdrawals ?? '—')} color="#fa8c16" icon="withdraw" sub={fmtNgn(stats?.pendingWithdrawalAmount ?? 0)} />
       </div>
 
       {/* Charts row 1: Trend + Hourly */}

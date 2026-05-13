@@ -1,5 +1,6 @@
 import client from './client'
 import type { ChatSession, ChatMessage, UserOrder } from '../types'
+import { swrFetch, invalidatePrefix } from './cache'
 
 export type { ChatSession, ChatMessage, UserOrder }
 
@@ -10,9 +11,18 @@ export type PollResult = {
   agentName: string | null
 }
 
-export const getSessions = (status = '') =>
-  client.get('/tuka/chat/admin/sessions', { params: { status, pageSize: 100 } })
-    .then(r => (r.data.rows || []) as ChatSession[])
+export const getSessions = (
+  status = '',
+  options: { onFresh?: (rows: ChatSession[]) => void; ttl?: number } = {},
+) =>
+  swrFetch(
+    'sessions:' + status,
+    () =>
+      client
+        .get('/tuka/chat/admin/sessions', { params: { status, pageSize: 100 } })
+        .then(r => (r.data.rows || []) as ChatSession[]),
+    { onFresh: options.onFresh, ttl: options.ttl ?? 2000 },  // 2s TTL — matches the active-chat poll interval
+  )
 
 export const getMessages = (sessionId: number) =>
   client.get(`/tuka/chat/messages/${sessionId}`, { params: { pageSize: 100 } })
@@ -43,11 +53,15 @@ export const sendReply = (sessionId: number, content: string) =>
   client.post('/tuka/chat/admin/reply', { sessionId, content })
     .then(r => r.data.data as ChatMessage)
 
-export const claimSession = (sessionId: number) =>
-  client.post(`/tuka/chat/admin/claim/${sessionId}`)
+export const claimSession = (sessionId: number) => {
+  invalidatePrefix('sessions:')
+  return client.post(`/tuka/chat/admin/claim/${sessionId}`)
+}
 
-export const closeSession = (sessionId: number) =>
-  client.post(`/tuka/chat/admin/close/${sessionId}`)
+export const closeSession = (sessionId: number) => {
+  invalidatePrefix('sessions:')
+  return client.post(`/tuka/chat/admin/close/${sessionId}`)
+}
 
 export const getUserOrders = (sessionId: number) =>
   client.get(`/tuka/chat/admin/user-orders/${sessionId}`)

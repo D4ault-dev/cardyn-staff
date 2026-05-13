@@ -2,7 +2,6 @@ import axios from 'axios'
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
 const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-const CODE_BASE_URL = isDev ? '' : 'https://api.cardyn.net'
 export let BASE_URL = isDev ? '' : (localStorage.getItem('cardyn_base_url') || 'https://api.cardyn.net')
 
 export function setBaseUrl(url: string) {
@@ -11,9 +10,25 @@ export function setBaseUrl(url: string) {
   client.defaults.baseURL = url
 }
 
-// ── In-memory GET cache — deduplicates identical requests within 3s ──────────
+// ── Short-lived GET cache — deduplicates identical requests within 30s ────────
+// NOTE: Real-time endpoints (poll, chat messages) are excluded — see CACHE_EXCLUDE
 const _cache = new Map<string, { data: any; ts: number }>()
-const CACHE_TTL = 3000  // 3 seconds
+const CACHE_TTL = 30_000  // 30 seconds — fast panel, avoids redundant refetches
+
+// Endpoints that must NEVER be cached — they are real-time pollers
+const CACHE_EXCLUDE = [
+  '/tuka/chat/poll/',
+  '/tuka/chat/messages/',
+  '/tuka/chat/admin/sessions',
+  '/tuka/chat/admin/new-sessions',
+  '/tuka/chat/admin/dashboard-poll',
+  '/tuka/staff/heartbeat',
+  '/tuka/staff/online',
+]
+
+function isExcluded(url: string): boolean {
+  return CACHE_EXCLUDE.some(prefix => url.includes(prefix))
+}
 
 function getCached(key: string) {
   const entry = _cache.get(key)
@@ -22,7 +37,6 @@ function getCached(key: string) {
 }
 function setCached(key: string, data: any) {
   _cache.set(key, { data, ts: Date.now() })
-  // Auto-cleanup old entries
   if (_cache.size > 100) {
     const now = Date.now()
     for (const [k, v] of _cache.entries()) {
@@ -31,19 +45,36 @@ function setCached(key: string, data: any) {
   }
 }
 
+/** Clear all axios-level GET cache entries whose URL contains a given substring */
+export function clearClientCacheByUrl(urlSubstring: string): void {
+  for (const k of _cache.keys()) {
+    if (k.includes(urlSubstring)) _cache.delete(k)
+  }
+}
+
+/** Clear the entire axios-level GET cache (call after any mutation) */
+export function clearClientCache(): void {
+  _cache.clear()
+}
+
+// ── In-flight request deduplication ──────────────────────────────────────────
+// Maps a request key → the in-flight Promise so concurrent identical GET
+// requests share a single network call instead of firing duplicates.
+const _inflight = new Map<string, Promise<any>>()
+
+// ── Axios instance ────────────────────────────────────────────────────────────
 const client = axios.create({
   baseURL: BASE_URL,
-  timeout: 12000,
+  timeout: 10000,  // 10s — appropriate for a staff panel
   headers: { 'Content-Type': 'application/json' },
 })
 
 // ── Request interceptor — serve cached GET responses ─────────────────────────
 client.interceptors.request.use(config => {
-  if (config.method?.toLowerCase() === 'get' && config.url) {
+  if (config.method?.toLowerCase() === 'get' && config.url && !isExcluded(config.url)) {
     const key = config.url + JSON.stringify(config.params || {})
     const cached = getCached(key)
     if (cached) {
-      // Return cached response by throwing a special "error" that the response interceptor catches
       const source = axios.CancelToken.source()
       config.cancelToken = source.token
       source.cancel(JSON.stringify({ __cached: true, data: cached }))
@@ -73,10 +104,11 @@ export function restoreToken() {
   return t
 }
 
+// ── Response interceptor ──────────────────────────────────────────────────────
 client.interceptors.response.use(
   res => {
-    // Cache successful GET responses
-    if (res.config.method?.toLowerCase() === 'get' && res.config.url) {
+    // Cache successful GET responses — but never cache real-time endpoints
+    if (res.config.method?.toLowerCase() === 'get' && res.config.url && !isExcluded(res.config.url)) {
       const key = res.config.url + JSON.stringify(res.config.params || {})
       setCached(key, res.data)
     }
@@ -93,7 +125,6 @@ client.interceptors.response.use(
       try {
         const parsed = JSON.parse(err.message)
         if (parsed.__cached) {
-          // Return a fake response with cached data
           return Promise.resolve({ data: parsed.data, status: 200, headers: {}, config: err.config || {} })
         }
       } catch { /* not a cache cancel */ }
@@ -102,5 +133,54 @@ client.interceptors.response.use(
     return Promise.reject(new Error(err.response?.data?.msg || err.message || 'Network error'))
   }
 )
+
+// ── Retry helper — retries once on network error with 500ms delay ─────────────
+function delay(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms))
+}
+
+function isNetworkError(err: any): boolean {
+  // Network errors have no response (timeout, DNS failure, connection refused)
+  return !err.response && err.message !== 'canceled'
+}
+
+/**
+ * Wraps client.get with:
+ * 1. Request deduplication — concurrent identical GETs share one promise
+ * 2. Retry once on network error with 500ms delay
+ */
+const originalGet = client.get.bind(client)
+client.get = function dedupedGet(url: string, config?: any): any {
+  // Never deduplicate real-time poll endpoints — each tick must fire independently
+  if (isExcluded(url)) {
+    return originalGet(url, config)
+      .catch(async (err: any) => {
+        if (isNetworkError(err)) { await delay(500); return originalGet(url, config) }
+        throw err
+      })
+  }
+
+  const key = url + JSON.stringify(config?.params || {})
+
+  // Return existing in-flight promise if one exists
+  const existing = _inflight.get(key)
+  if (existing) return existing
+
+  const promise = originalGet(url, config)
+    .catch(async (err: any) => {
+      // Retry once on network error
+      if (isNetworkError(err)) {
+        await delay(500)
+        return originalGet(url, config)
+      }
+      throw err
+    })
+    .finally(() => {
+      _inflight.delete(key)
+    })
+
+  _inflight.set(key, promise)
+  return promise
+} as typeof client.get
 
 export default client

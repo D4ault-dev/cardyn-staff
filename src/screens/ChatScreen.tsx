@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import {
-  getSessions, getMessages, pollMessages, pollSession, sendReply,
+  getSessions, getMessages, pollSession, sendReply,
   claimSession, closeSession, getUserOrders, getUserProfile, transferSession,
 } from '../api/chat'
 import type { ChatSession, ChatMessage, UserOrder } from '../types'
 import { useAuth } from '../context/AuthContext'
+import { ChatWebSocket } from '../api/ws'
 import client from '../api/client'
 import { playNewMessage } from '../utils/sound'
 import { resolveUrl } from '../utils/resolveUrl'
@@ -27,7 +28,6 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
 }) {
   const { user } = useAuth()
   const myUserId = user?.userId ?? 0
-  const myAvatar = null // could add agent avatar later
 
   const [sessions,     setSessions]     = useState<ChatSession[]>([])
   const [active,       setActive]       = useState<ChatSession | null>(null)
@@ -51,7 +51,51 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
 
   const lastIdRef = useRef(0)
   const pollRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const wsRef     = useRef<ChatWebSocket | null>(null)
   const listRef   = useRef<HTMLDivElement>(null)
+  const [wsConnected, setWsConnected] = useState(false)
+
+  // ── WebSocket — connect once on mount, reconnects automatically ───────────
+  useEffect(() => {
+    if (!user) return
+    const token = localStorage.getItem('cardyn_staff_token') || ''
+    const ws = new ChatWebSocket(token)
+    wsRef.current = ws
+
+    ws.onConnect    = () => setWsConnected(true)
+    ws.onDisconnect = () => setWsConnected(false)
+
+    ws.onMessage = (frame) => {
+      if (frame.type === 'message') {
+        const msg = frame.data as ChatMessage
+        const sid = msg.sessionId ?? (msg as any).session_id
+        // Only append if this message belongs to the currently open session
+        setActive(prev => {
+          if (!prev || prev.id !== sid) return prev
+          setMessages(prevMsgs => {
+            if (prevMsgs.some(m => m.id === msg.id)) return prevMsgs
+            lastIdRef.current = msg.id
+            const hasUserMsg = msg.senderType === 'user'
+            if (hasUserMsg) playNewMessage()
+            scrollBottom()
+            return [...prevMsgs, msg]
+          })
+          return prev
+        })
+        // Also refresh session list unread counts
+        loadSessions()
+      } else if (frame.type === 'status') {
+        const { sessionId, status, agentId, agentName } = frame.data
+        setActive(prev => {
+          if (!prev || prev.id !== sessionId) return prev
+          return { ...prev, status: status as any, agentId, agentName }
+        })
+      }
+    }
+
+    ws.connect()
+    return () => ws.disconnect()
+  }, [user]) // eslint-disable-line
 
   const scrollBottom = useCallback(() => {
     setTimeout(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight }, 60)
@@ -68,13 +112,20 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
 
   useEffect(() => {
     loadSessions()
-    const t = setInterval(loadSessions, 8000)  // refresh session list every 8s (was 4s)
+    // Refresh session list every 2s when a chat is open (unread counts update),
+    // every 8s otherwise to save bandwidth
+    const interval = active ? 2000 : 8000
+    const t = setInterval(loadSessions, interval)
     return () => clearInterval(t)
-  }, [loadSessions])
+  }, [loadSessions, active])
 
   const activeSessionIdRef = useRef<number>(0)  // always current, used inside poll closure
 
   function openSession(s: ChatSession) {
+    // Leave previous session's WS subscription
+    if (activeSessionIdRef.current && activeSessionIdRef.current !== s.id) {
+      wsRef.current?.leaveSession(activeSessionIdRef.current)
+    }
     setActive(s); setMessages([]); setOrders([]); setProfile(null); setShowProfile(false)
     lastIdRef.current = 0
     activeSessionIdRef.current = s.id
@@ -83,18 +134,21 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
     setLoadingMsg(true)
     // Mark session as read
     client.post(`/tuka/chat/admin/mark-read/${s.id}`).catch(() => {})
-    // Load messages FIRST, then start poll with correct lastId
+    // Join WebSocket session for real-time messages
+    wsRef.current?.joinSession(s.id)
+    // Load messages FIRST, then start fallback poll only if WS is not connected
     getMessages(s.id).then(msgs => {
       setMessages(msgs)
       lastIdRef.current = msgs.length ? msgs[msgs.length - 1].id : 0
       scrollBottom()
-      // Start poll AFTER we have the correct lastId
+      // Fallback poll — only runs when WebSocket is disconnected
       if (pollRef.current) clearInterval(pollRef.current)
       pollRef.current = setInterval(() => {
+        // Skip poll if WS is connected — WS handles delivery
+        if (wsRef.current?.isConnected) return
         const sid = activeSessionIdRef.current
         if (!sid) return
         pollSession(sid, lastIdRef.current).then(result => {
-          // Update messages
           if (result.messages.length > 0) {
             lastIdRef.current = result.messages[result.messages.length - 1].id
             const hasUserMsg = result.messages.some(m => m.senderType === 'user')
@@ -107,7 +161,6 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
               return [...prev, ...fresh]
             })
           }
-          // Update session status if it changed (e.g. auto-closed)
           setActive(prev => {
             if (!prev || prev.id !== sid) return prev
             if (prev.status !== result.status) {
@@ -116,7 +169,7 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
             return prev
           })
         }).catch(() => {})
-      }, 1500)  // poll every 1.5s — matches app poller for consistent latency
+      }, 1500)
     }).finally(() => setLoadingMsg(false))
     getUserOrders(s.id).then(setOrders).catch(() => {})
     getUserProfile(s.id).then(p => { if (p) setProfile(p) }).catch(() => {})
@@ -248,13 +301,6 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
   const statusColor = (s: string) =>
     s === 'claimed' ? '#52c41a' : s === 'closed' ? '#999' : '#fa8c16'
 
-  // Status label matching spec: pending=待接入, claimed=已接入, closed=已关闭
-  const statusText = (s: ChatSession) => {
-    if (s.status === 'claimed') return `已接入 · ${s.agentName || ''}`
-    if (s.status === 'closed')  return '已关闭'
-    return '待接入'
-  }
-
   return (
     <div className="chat-root">
       {/* Left: session list */}
@@ -313,6 +359,11 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
               </div>
             </div>
             <div className="ch-actions">
+              {/* WS connection indicator */}
+              <span className="ws-indicator" title={wsConnected ? 'WebSocket 已连接' : '轮询模式'}>
+                <span className="ws-dot" style={{ background: wsConnected ? '#52c41a' : '#fa8c16' }} />
+                {wsConnected ? '实时' : '轮询'}
+              </span>
               <button className="ch-btn view" onClick={() => setShowProfile(v => !v)}>
                 {showProfile ? '隐藏资料' : '查看资料'}
               </button>
@@ -329,7 +380,7 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
           {/* Read-only banner */}
           {active.status === 'claimed' && !isAssigned && (
             <div className="readonly-banner">
-              👁 只读模式 — 已由 <strong>{active.agentName}</strong> 接入，您可查看但不能回复
+              只读模式 — 已由 <strong>{active.agentName}</strong> 接入，您可查看但不能回复
             </div>
           )}
 
@@ -354,7 +405,6 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
                     <div className="msg-system"><span>{m.content}</span></div>
                   </React.Fragment>
                 )
-                const isMe = m.senderType === 'agent' && m.senderId === myUserId
                 const isAgent = m.senderType === 'agent'
                 return (
                   <React.Fragment key={m.id}>
@@ -427,11 +477,15 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
                 rows={2} />
               <div className="input-actions">
-                <label className="act-icon-btn" title="表情">😊
-                  {/* emoji placeholder */}
+                <label className="act-icon-btn" title="表情">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+                    <circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+                  </svg>
                 </label>
                 <label className="act-icon-btn img-label" title="发送图片">
-                  🖼
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                  </svg>
                   <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
                 </label>
                 <button className="send-btn" onClick={handleSend} disabled={!input.trim() || sending}>
@@ -449,7 +503,11 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
         </div>
       ) : (
         <div className="chat-placeholder">
-          <div className="cp-icon">💬</div>
+          <div className="cp-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="56" height="56">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
           <div className="cp-text">选择一个会话开始</div>
         </div>
       )}
