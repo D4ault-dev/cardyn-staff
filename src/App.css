@@ -41,39 +41,68 @@ body {
 /* ── Top navigation ── */
 .top-nav {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; height: 48px;
-  background: #fff; border-bottom: 1px solid #e8e8e8;
+  padding: 0 16px; height: 52px;
+  background: #0f172a;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0; -webkit-app-region: drag;
 }
-.top-nav-left { display: flex; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
-.top-nav-right { display: flex; align-items: center; gap: 12px; -webkit-app-region: no-drag; }
+.top-nav-left { display: flex; align-items: center; gap: 2px; -webkit-app-region: no-drag; }
+.top-nav-right { display: flex; align-items: center; gap: 10px; -webkit-app-region: no-drag; }
+
+/* Brand */
+.nav-brand {
+  display: flex; align-items: center; gap: 8px;
+  margin-right: 4px; flex-shrink: 0;
+}
+.nav-brand-logo {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: linear-gradient(135deg, #00C2B4, #1677ff);
+  color: #fff; font-size: 14px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+  letter-spacing: -0.5px;
+}
+.nav-brand-name {
+  font-size: 14px; font-weight: 700; color: #fff;
+  letter-spacing: 0.3px; white-space: nowrap;
+}
+.nav-divider {
+  width: 1px; height: 20px; background: rgba(255,255,255,0.15);
+  margin: 0 8px; flex-shrink: 0;
+}
 
 .tab-btn {
-  padding: 6px 16px; border-radius: 6px; font-size: 14px; font-weight: 500;
-  color: #666; text-decoration: none; cursor: pointer; position: relative;
-  transition: all .15s; border: none; background: none;
+  padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500;
+  color: rgba(255,255,255,0.6); text-decoration: none; cursor: pointer; position: relative;
+  transition: all .15s; border: none; background: none; white-space: nowrap;
 }
-.tab-btn:hover { color: #1677ff; background: #e6f4ff; }
-.tab-btn.active { color: #fff; background: #1677ff; }
+.tab-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.tab-btn.active { color: #fff; background: rgba(255,255,255,0.15); font-weight: 600; }
 .tab-badge {
-  position: absolute; top: 2px; right: 4px;
+  position: absolute; top: 2px; right: 2px;
   background: #ff4d4f; color: #fff; border-radius: 8px;
   padding: 0 5px; font-size: 10px; font-weight: 700; min-width: 16px; text-align: center;
 }
 .tab-badge.orange { background: #fa8c16; }
 
+/* User info */
 .nav-user { display: flex; align-items: center; gap: 8px; }
 .nav-avatar {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: #1677ff; color: #fff; font-size: 12px; font-weight: 700;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, #00C2B4, #1677ff);
+  color: #fff; font-size: 12px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
 }
-.nav-username { font-size: 13px; color: #333; }
+.nav-user-info { display: flex; flex-direction: column; gap: 1px; }
+.nav-username { font-size: 13px; color: #fff; font-weight: 600; line-height: 1.2; }
+.nav-role { font-size: 10px; color: rgba(255,255,255,0.45); line-height: 1.2; }
 .nav-logout {
-  padding: 4px 12px; border-radius: 4px; border: 1px solid #d9d9d9;
-  background: #fff; color: #666; font-size: 13px; cursor: pointer;
+  padding: 5px 12px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: transparent; color: rgba(255,255,255,0.7); font-size: 12px; cursor: pointer;
+  transition: all .15s; white-space: nowrap;
 }
-.nav-logout:hover { border-color: #ff4d4f; color: #ff4d4f; }
+.nav-logout:hover { border-color: #ff4d4f; color: #ff4d4f; background: rgba(255,77,79,0.1); }
 
 .app-main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 

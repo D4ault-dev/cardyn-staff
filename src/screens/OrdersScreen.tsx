@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { getOrders, auditOrder } from '../api/orders'
 import type { Order } from '../types'
-import client from '../api/client'
+import client, { clearClientCacheByUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { canVerifyOrders } from '../utils/roles'
 import { playSuccess, playError } from '../utils/sound'
@@ -88,6 +88,7 @@ export default function OrdersScreen() {
   // Pending orders popup
   const [pendingPopup, setPendingPopup] = useState(false)
   const [pendingRows,  setPendingRows]  = useState<Order[]>([])
+  const [pendingLoading, setPendingLoading] = useState(false)
   const [claiming,     setClaiming]     = useState<number | null>(null)
   const pendingTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const prevPending  = useRef(0)
@@ -141,11 +142,14 @@ export default function OrdersScreen() {
     setPage(1)
   }
 
-  // Load pending orders for popup
+  // Load pending orders for popup — clear cache first so we always get fresh data
   function loadPendingPopup() {
+    setPendingLoading(true)
+    clearClientCacheByUrl('/tuka/order/list')
     client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 50 } })
       .then(r => setPendingRows(r.data.rows || []))
       .catch(() => {})
+      .finally(() => setPendingLoading(false))
   }
 
   // Claim/accept a pending order (mark as processing)
@@ -604,20 +608,49 @@ export default function OrdersScreen() {
             <div className="pp-header">
               <div className="pp-header-left">
                 <span className="pp-title">待受理订单</span>
-                <span className="pp-count-badge">{pendingRows.length}</span>
+                {!pendingLoading && (
+                  <span className="pp-count-badge">{pendingRows.length}</span>
+                )}
               </div>
-              <button className="pp-close" onClick={() => setPendingPopup(false)}>✕</button>
+              <div className="pp-header-actions">
+                <button
+                  className="pp-refresh-btn"
+                  onClick={loadPendingPopup}
+                  disabled={pendingLoading}
+                  title="刷新"
+                >
+                  {pendingLoading ? '加载中…' : '↻ 刷新'}
+                </button>
+                <button className="pp-close" onClick={() => setPendingPopup(false)}>✕</button>
+              </div>
             </div>
 
             {/* Cards grid */}
             <div className="pp-cards-wrap">
-              {pendingRows.length === 0 ? (
+              {/* Loading skeleton */}
+              {pendingLoading && (
+                <div className="pp-cards-grid">
+                  {[1,2,3,4,5,6].map(k => (
+                    <div key={k} className="pp-order-card pp-skeleton-card">
+                      <div className="pp-sk-line wide" />
+                      <div className="pp-sk-amounts">
+                        <div className="pp-sk-line medium" />
+                        <div className="pp-sk-line medium" />
+                      </div>
+                      <div className="pp-sk-line narrow" />
+                      <div className="pp-sk-line narrow" />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!pendingLoading && pendingRows.length === 0 ? (
                 <div className="pp-empty-card">
                   <div className="pp-empty-icon">—</div>
                   <div className="pp-empty-title">暂无待受理订单</div>
                   <div className="pp-empty-sub">所有订单已处理完毕</div>
                 </div>
-              ) : (
+              ) : !pendingLoading && (
                 <div className="pp-cards-grid">
                   {pendingRows.map(r => (
                     <div key={r.id} className="pp-order-card">
@@ -654,18 +687,26 @@ export default function OrdersScreen() {
                           <span className="pp-dl">类型</span>
                           <span className="pp-dv">{r.inputType || '—'}</span>
                         </span>
+                        {r.quantity && r.quantity > 1 && (
+                          <span className="pp-card-detail-item">
+                            <span className="pp-dl">数量</span>
+                            <span className="pp-dv">{r.quantity}</span>
+                          </span>
+                        )}
                       </div>
 
                       {/* Time + claim */}
                       <div className="pp-card-footer">
                         <span className="pp-card-time">{r.createTime?.slice(0, 16)}</span>
-                        <button
-                          className={'pp-claim-btn' + (claiming === r.id ? ' loading' : '')}
-                          disabled={claiming === r.id}
-                          onClick={() => claimOrder(r.id)}
-                        >
-                          {claiming === r.id ? '接单中…' : '接单 →'}
-                        </button>
+                        {canVerify && (
+                          <button
+                            className={'pp-claim-btn' + (claiming === r.id ? ' loading' : '')}
+                            disabled={claiming === r.id}
+                            onClick={() => claimOrder(r.id)}
+                          >
+                            {claiming === r.id ? '接单中…' : '接单 →'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

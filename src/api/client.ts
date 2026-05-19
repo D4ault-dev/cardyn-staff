@@ -184,3 +184,8 @@ client.get = function dedupedGet(url: string, config?: any): any {
 } as typeof client.get
 
 export default client
+
+// ── Auto-restore token on module load ────────────────────────────────────────
+// This ensures the Authorization header is set immediately when the app starts,
+// before any React effects run. Critical for Electron where localStorage persists.
+restoreToken()

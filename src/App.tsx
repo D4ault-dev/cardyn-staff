@@ -78,9 +78,15 @@ function Shell() {
 
   return (
     <div className="app-shell">
-      {/* Top navigation bar — matches screenshot */}
+      {/* Top navigation bar */}
       <div className="top-nav">
         <div className="top-nav-left">
+          {/* Brand */}
+          <div className="nav-brand">
+            <div className="nav-brand-logo">C</div>
+            <span className="nav-brand-name">Cardyn Staff</span>
+          </div>
+          <div className="nav-divider" />
           <NavLink to="/dashboard"   className={({ isActive }) => 'tab-btn' + (isActive ? ' active' : '')}>数据概览</NavLink>
           <NavLink to="/chat"        className={({ isActive }) => 'tab-btn' + (isActive ? ' active' : '')}>
             客服中心{unread > 0 && <span className="tab-badge">{unread > 99 ? '99+' : unread}</span>}
@@ -98,7 +104,10 @@ function Shell() {
         <div className="top-nav-right">
           <div className="nav-user">
             <div className="nav-avatar">{(user.nickName || user.username)[0].toUpperCase()}</div>
-            <span className="nav-username">{user.nickName || user.username}</span>
+            <div className="nav-user-info">
+              <span className="nav-username">{user.nickName || user.username}</span>
+              <span className="nav-role">{user.roleType}</span>
+            </div>
           </div>
           <button className="nav-logout" onClick={logout}>退出</button>
         </div>
