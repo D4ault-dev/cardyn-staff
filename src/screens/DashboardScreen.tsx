@@ -4,6 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import client from '../api/client'
+import DateRangePicker from '../components/DateRangePicker'
 import './DashboardScreen.css'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -22,6 +23,17 @@ type TrendRow   = { day: string; orderCount: number; revenue: number }
 type StatusRow  = { status: string; count: number }
 type CardRow    = { name: string; count: number; revenue: number }
 type HourlyRow  = { hour: string; count: number }
+type RecentTx   = {
+  id: number
+  orderNo: string
+  userId: number
+  categoryName: string
+  cardCurrency: string
+  cardAmount: number
+  ngnAmount: number
+  status: string
+  createTime: string
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtNgn(n: number) {
@@ -31,6 +43,17 @@ function fmtNgn(n: number) {
 }
 function fmtFull(n: number) {
   return '₦' + (n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })
+}
+
+// Today as yyyy-MM-dd
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+// 30 days ago as yyyy-MM-dd
+function daysAgo(n: number) {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().slice(0, 10)
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -46,6 +69,14 @@ const STATUS_LABELS: Record<string, string> = {
   rejected:   '已拒绝',
 }
 const PIE_COLORS = ['#52c41a', '#fa8c16', '#1677ff', '#ff4d4f', '#722ed1', '#13c2c2']
+
+const CURRENCY_SYMBOL: Record<string, string> = {
+  USD: '$', GBP: '£', EUR: '€', CAD: 'C$', AUD: 'A$',
+  JPY: '¥', CNY: '¥', PHP: '₱', SGD: 'S$', NGN: '₦',
+  US: '$', GB: '£', EU: '€', CA: 'C$', AU: 'A$',
+  JP: '¥', CN: '¥', PH: '₱', SG: 'S$', NG: '₦',
+}
+function currSym(code: string) { return CURRENCY_SYMBOL[code] || '' }
 
 // ── KPI Icons (pure SVG — no emoji) ──────────────────────────────────────────
 const ICONS: Record<string, React.ReactElement> = {
@@ -103,6 +134,14 @@ function TrendTooltip({ active, payload, label }: any) {
   )
 }
 
+// ── Quick date presets ────────────────────────────────────────────────────────
+const PRESETS = [
+  { label: '今日',   start: today(),      end: today() },
+  { label: '近7天',  start: daysAgo(6),   end: today() },
+  { label: '近30天', start: daysAgo(29),  end: today() },
+  { label: '近90天', start: daysAgo(89),  end: today() },
+]
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const [stats,    setStats]    = useState<Stats | null>(null)
@@ -110,43 +149,82 @@ export default function DashboardScreen() {
   const [status,   setStatus]   = useState<StatusRow[]>([])
   const [topCards, setTopCards] = useState<CardRow[]>([])
   const [hourly,   setHourly]   = useState<HourlyRow[]>([])
+  const [recentTx, setRecentTx] = useState<RecentTx[]>([])
   const [loading,  setLoading]  = useState(true)
   const [firstLoad, setFirstLoad] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
-  const load = useCallback(async () => {
+  // Date range filter — default to last 30 days
+  const [startDate, setStartDate] = useState(daysAgo(29))
+  const [endDate,   setEndDate]   = useState(today())
+  const [startTime, setStartTime] = useState('')
+  const [endTime,   setEndTime]   = useState('')
+  const [activePreset, setActivePreset] = useState(2) // "近30天" index
+
+  const load = useCallback(async (sd: string, ed: string, st: string, et: string) => {
     setLoading(true)
     try {
-      const [s, t, st, tc, h] = await Promise.all([
+      const startTime_ = sd ? sd + ' ' + (st || '00:00') + ':00' : undefined
+      const endTime_   = ed ? ed + ' ' + (et || '23:59') + ':59' : undefined
+
+      const [s, t, stBreak, tc, h, tx] = await Promise.all([
         client.get('/tuka/dashboard/stats'),
         client.get('/tuka/dashboard/trend'),
         client.get('/tuka/dashboard/status'),
-        client.get('/tuka/dashboard/topCards'),
+        client.get('/tuka/dashboard/topCards', {
+          params: {
+            startDate: sd || undefined,
+            endDate:   ed || undefined,
+          },
+        }),
         client.get('/tuka/dashboard/hourly'),
+        client.get('/tuka/order/list', {
+          params: {
+            pageNum:   1,
+            pageSize:  20,
+            startTime: startTime_,
+            endTime:   endTime_,
+          },
+        }),
       ])
       setStats(s.data.data)
       setTrend(t.data.data || [])
-      setStatus(st.data.data || [])
+      setStatus(stBreak.data.data || [])
       setTopCards(tc.data.data || [])
       setHourly(h.data.data || [])
+      setRecentTx(tx.data.rows || [])
       setLastRefresh(new Date())
     } catch { /* keep existing */ }
     finally { setLoading(false); setFirstLoad(false) }
   }, [])
 
   useEffect(() => {
-    load()
+    load(startDate, endDate, startTime, endTime)
     // Auto-refresh every 60s
-    const t = setInterval(load, 60_000)
+    const t = setInterval(() => load(startDate, endDate, startTime, endTime), 60_000)
     return () => clearInterval(t)
-  }, [load])
+  }, [load, startDate, endDate, startTime, endTime])
+
+  function applyPreset(idx: number) {
+    const p = PRESETS[idx]
+    setActivePreset(idx)
+    setStartDate(p.start)
+    setEndDate(p.end)
+    setStartTime('')
+    setEndTime('')
+  }
+
+  function handleDateChange(s: string, e: string, st: string, et: string) {
+    setActivePreset(-1) // custom
+    setStartDate(s); setEndDate(e); setStartTime(st); setEndTime(et)
+  }
 
   // Shorten trend day labels: "2026-05-12" → "05/12"
   const trendData = trend.map(r => ({ ...r, day: r.day.slice(5).replace('-', '/') }))
 
   // Only show hours up to current hour
-  const now = new Date().getHours()
-  const hourlyData = hourly.filter((_, i) => i <= now)
+  const nowHour = new Date().getHours()
+  const hourlyData = hourly.filter((_, i) => i <= nowHour)
 
   return (
     <div className="dash-root">
@@ -156,9 +234,30 @@ export default function DashboardScreen() {
           <h2 className="dash-title">数据概览</h2>
           <span className="dash-refresh">上次更新：{lastRefresh.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
         </div>
-        <button className="dash-refresh-btn" onClick={load} disabled={loading}>
-          {loading ? '加载中…' : '↻ 刷新'}
-        </button>
+        <div className="dash-header-right">
+          {/* Quick presets */}
+          <div className="dash-presets">
+            {PRESETS.map((p, i) => (
+              <button
+                key={p.label}
+                className={'dash-preset-btn' + (activePreset === i ? ' active' : '')}
+                onClick={() => applyPreset(i)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {/* Custom date range */}
+          <DateRangePicker
+            startDate={startDate} endDate={endDate}
+            startTime={startTime} endTime={endTime}
+            onChange={handleDateChange}
+            onClear={() => { setActivePreset(2); setStartDate(daysAgo(29)); setEndDate(today()); setStartTime(''); setEndTime('') }}
+          />
+          <button className="dash-refresh-btn" onClick={() => load(startDate, endDate, startTime, endTime)} disabled={loading}>
+            {loading ? '加载中…' : '↻ 刷新'}
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -248,7 +347,9 @@ export default function DashboardScreen() {
         <div className="dash-card wide">
           <div className="dash-card-head">
             <span className="dash-card-title">热门卡种 Top 8</span>
-            <span className="dash-card-sub">按订单量</span>
+            <span className="dash-card-sub">
+              {startDate && endDate ? `${startDate} ~ ${endDate}` : '按订单量'}
+            </span>
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={topCards} layout="vertical"
@@ -265,6 +366,62 @@ export default function DashboardScreen() {
               <Bar dataKey="revenue" name="收入"   fill="#52c41a" radius={[0, 3, 3, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Recent Transactions Table */}
+      <div className="dash-card" style={{ marginBottom: 20 }}>
+        <div className="dash-card-head" style={{ marginBottom: 14 }}>
+          <span className="dash-card-title">最近交易记录</span>
+          <span className="dash-card-sub">
+            {startDate && endDate ? `${startDate} ~ ${endDate}` : '最新 20 条'}
+          </span>
+        </div>
+        <div className="dash-tx-wrap">
+          <table className="dash-tx-table">
+            <thead>
+              <tr>
+                <th>订单号</th>
+                <th>用户ID</th>
+                <th>卡种</th>
+                <th>面值</th>
+                <th>结算金额</th>
+                <th>状态</th>
+                <th>时间</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(loading && firstLoad) && [1,2,3,4,5].map(k => (
+                <tr key={k} className="skeleton-row">
+                  {[1,2,3,4,5,6,7].map(c => (
+                    <td key={c}><div className="skeleton-cell" /></td>
+                  ))}
+                </tr>
+              ))}
+              {!(loading && firstLoad) && recentTx.length === 0 && (
+                <tr><td colSpan={7} className="dash-tx-empty">暂无交易记录</td></tr>
+              )}
+              {!(loading && firstLoad) && recentTx.map(r => {
+                const sc = STATUS_COLORS[r.status] || '#999'
+                const sl = STATUS_LABELS[r.status] || r.status
+                return (
+                  <tr key={r.id}>
+                    <td className="mono tx-orderno">{r.orderNo}</td>
+                    <td>{r.userId}</td>
+                    <td>{r.categoryName}</td>
+                    <td className="amount-green">{currSym(r.cardCurrency)}{r.cardAmount}</td>
+                    <td className="amount-red">{fmtNgn(r.ngnAmount)}</td>
+                    <td>
+                      <span className="tx-status-pill" style={{ background: sc + '20', color: sc }}>
+                        ● {sl}
+                      </span>
+                    </td>
+                    <td className="tx-time">{r.createTime?.slice(0, 16)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

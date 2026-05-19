@@ -144,6 +144,20 @@ export default function WithdrawalsScreen() {
   const totalPages = Math.ceil(total / pageSize)
   function goPage(p: number) { if (p < 1 || p > totalPages) return; setPage(p); load(p) }
 
+  function renderPagination() {
+    const pages: (number | '...')[] = []
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      pages.push(1, 2, 3, 4, 5)
+      if (page > 6) pages.push('...')
+      if (page > 5 && page < totalPages - 1) pages.push(page)
+      pages.push('...')
+      pages.push(totalPages)
+    }
+    return pages
+  }
+
   return (
     <div className="orders-root">
       <div className="orders-toolbar">
@@ -238,9 +252,11 @@ export default function WithdrawalsScreen() {
       <div className="orders-pagination">
         <span className="pg-total">共 {total} 条</span>
         <button className="pg-btn" disabled={page <= 1} onClick={() => goPage(page - 1)}>‹</button>
-        {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map(p => (
-          <button key={p} className={'pg-btn' + (p === page ? ' current' : '')} onClick={() => goPage(p)}>{p}</button>
-        ))}
+        {renderPagination().map((p, i) =>
+          p === '...'
+            ? <span key={`e${i}`} className="pg-ellipsis">···</span>
+            : <button key={p} className={'pg-btn' + (p === page ? ' current' : '')} onClick={() => goPage(p as number)}>{p}</button>
+        )}
         <button className="pg-btn" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>›</button>
         <span className="pg-size">10 / page</span>
       </div>

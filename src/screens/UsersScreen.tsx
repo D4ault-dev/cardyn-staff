@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { getUsers } from '../api/users'
+import { getUsers, setUserStatus } from '../api/users'
 import type { AppUser } from '../types'
+import { useAuth } from '../context/AuthContext'
+import { ROLES } from '../utils/roles'
 import DateRangePicker from '../components/DateRangePicker'
 import './OrdersScreen.css'
 import './UsersScreen.css'
@@ -12,6 +14,9 @@ function statusLabel(s: number) { return s === 1 ? '正常' : '封禁' }
 function statusColor(s: number) { return s === 1 ? '#52c41a' : '#ff4d4f' }
 
 export default function UsersScreen() {
+  const { user } = useAuth()
+  const canManage = user?.roleType === ROLES.SUPER || user?.roleType === ROLES.FINANCE
+
   const [rows,    setRows]    = useState<AppUser[]>([])
   const [total,   setTotal]   = useState(0)
   const [page,    setPage]    = useState(1)
@@ -24,6 +29,7 @@ export default function UsersScreen() {
   const [endDate,   setEndDate]   = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime,   setEndTime]   = useState('')
+  const [toggling,  setToggling]  = useState<number | null>(null)
 
   const load = useCallback((p: number) => {
     setLoading(true)
@@ -44,6 +50,33 @@ export default function UsersScreen() {
 
   const totalPages = Math.ceil(total / pageSize)
   function goPage(p: number) { if (p < 1 || p > totalPages) return; setPage(p); load(p) }
+
+  function renderPagination() {
+    const pages: (number | '...')[] = []
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      pages.push(1, 2, 3, 4, 5)
+      if (page > 6) pages.push('...')
+      if (page > 5 && page < totalPages - 1) pages.push(page)
+      pages.push('...')
+      pages.push(totalPages)
+    }
+    return pages
+  }
+
+  async function handleToggleStatus(r: AppUser) {
+    const newStatus = r.status === 1 ? 0 : 1
+    const action = newStatus === 0 ? '封禁' : '解封'
+    if (!confirm(`确定${action}用户 ${r.phone}？`)) return
+    setToggling(r.id)
+    try {
+      await setUserStatus(r.id, newStatus as 0 | 1)
+      setRows(prev => prev.map(u => u.id === r.id ? { ...u, status: newStatus } : u))
+      if (detail?.id === r.id) setDetail(prev => prev ? { ...prev, status: newStatus } : prev)
+    } catch (e: any) { alert(e.message) }
+    finally { setToggling(null) }
+  }
 
   return (
     <div className="orders-root">
@@ -113,6 +146,16 @@ export default function UsersScreen() {
                 <td>{r.createTime?.slice(0, 10)}</td>
                 <td>
                   <button className="act-btn blue" onClick={() => setDetail(r)}>查看</button>
+                  {canManage && (
+                    <button
+                      className={'act-btn ' + (r.status === 1 ? 'danger' : 'primary')}
+                      disabled={toggling === r.id}
+                      onClick={() => handleToggleStatus(r)}
+                      style={{ marginLeft: 4 }}
+                    >
+                      {toggling === r.id ? '…' : r.status === 1 ? '封禁' : '解封'}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -124,10 +167,11 @@ export default function UsersScreen() {
       <div className="orders-pagination">
         <span className="pg-total">共 {total} 条</span>
         <button className="pg-btn" disabled={page <= 1} onClick={() => goPage(page - 1)}>‹</button>
-        {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map(p => (
-          <button key={p} className={'pg-btn' + (p === page ? ' current' : '')} onClick={() => goPage(p)}>{p}</button>
-        ))}
-        {totalPages > 7 && <span className="pg-ellipsis">···</span>}
+        {renderPagination().map((p, i) =>
+          p === '...'
+            ? <span key={`e${i}`} className="pg-ellipsis">···</span>
+            : <button key={p} className={'pg-btn' + (p === page ? ' current' : '')} onClick={() => goPage(p as number)}>{p}</button>
+        )}
         <button className="pg-btn" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>›</button>
         <span className="pg-size">10 / page</span>
       </div>

@@ -58,6 +58,7 @@ function CodeRow({ index, code }: { index: number; code: string }) {
 
 export default function OrdersScreen() {
   const { user } = useAuth()
+  const canVerify = canVerifyOrders(user?.roleType || '')
 
   const [rows,         setRows]         = useState<Order[]>([])
   const [total,        setTotal]        = useState(0)
@@ -302,7 +303,7 @@ export default function OrdersScreen() {
                   <div className="action-btns">
                     <button className="act-btn blue" onClick={() => setVerifyData(r)}>查看数据</button>
                     <button className="act-btn green" onClick={() => setCardData(r)}>查看</button>
-                    {(r.status === 'pending' || r.status === 'processing') ? (
+                    {canVerify && (r.status === 'pending' || r.status === 'processing') ? (
                       <>
                         <button className="act-btn primary"
                           onClick={() => { setAuditRow(r); setAuditResult('paid'); setAuditRemark('') }}>
@@ -484,13 +485,13 @@ export default function OrdersScreen() {
               {/* 到期时间 */}
               <div className="form-row">
                 <label className="form-label">到期时间：</label>
-                <input className="form-input" readOnly value={''} placeholder="—" />
+                <input className="form-input" readOnly value={cardData.cardExpiry || ''} placeholder="—" />
               </div>
 
               {/* CVV */}
               <div className="form-row">
                 <label className="form-label">Cvv：</label>
-                <input className="form-input" readOnly value={''} placeholder="—" />
+                <input className="form-input" readOnly value={cardData.cardCvv || ''} placeholder="—" />
               </div>
 
               {/* 图片 */}

@@ -1,6 +1,7 @@
 import client from './client'
 import type { AppUser } from '../types'
-import { swrFetch } from './cache'
+import { swrFetch, invalidatePrefix } from './cache'
+import { clearClientCacheByUrl } from './client'
 
 export type { AppUser }
 
@@ -21,4 +22,11 @@ export const getUsers = (
         .then(r => ({ rows: (r.data.rows || []) as AppUser[], total: r.data.total as number })),
     { onFresh: options.onFresh },
   )
+}
+
+/** Toggle user ban status: status 1 = active, 0 = banned */
+export const setUserStatus = (userId: number, status: 0 | 1) => {
+  invalidatePrefix('users:')
+  clearClientCacheByUrl('/tuka/user/list')
+  return client.put('/tuka/user/status', { userId, status })
 }

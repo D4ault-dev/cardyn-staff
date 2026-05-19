@@ -64,6 +64,8 @@ export type Order = {
   sellRate?: number
   newAmount?: number
   cardCode?: string
+  cardExpiry?: string | null
+  cardCvv?: string | null
 }
 
 export type Withdrawal = {

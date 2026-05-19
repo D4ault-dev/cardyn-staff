@@ -10,7 +10,7 @@ export const ROLES = {
 
 // Can this role verify/audit orders?
 export function canVerifyOrders(roleType: string) {
-  return [ROLES.SUPER, ROLES.VERIFY, ROLES.CS].includes(roleType as any)
+  return [ROLES.SUPER, ROLES.VERIFY].includes(roleType as any)
 }
 
 // Can this role process withdrawal payments?
