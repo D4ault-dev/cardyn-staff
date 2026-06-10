@@ -139,8 +139,11 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
     loadSessions()
     // Refresh session list every 15s when a chat is open,
     // every 30s otherwise to save bandwidth
+    // Pause when window is hidden (minimized/background tab) to save CPU
     const interval = active ? 15000 : 30000
-    const t = setInterval(loadSessions, interval)
+    const t = setInterval(() => {
+      if (!document.hidden) loadSessions()
+    }, interval)
     return () => clearInterval(t)
   }, [loadSessions, active])
 

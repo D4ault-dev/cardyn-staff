@@ -47,12 +47,11 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    minify: 'esbuild',
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          charts: ['recharts'],
+        manualChunks: (id: string) => {
+          if (id.includes('recharts') || id.includes('d3-')) return 'charts'
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('react-router')) return 'vendor'
         }
       }
     }
