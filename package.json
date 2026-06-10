@@ -46,7 +46,6 @@
       "!dist/**/*.map",
       "!**/*.{ts,tsx,js.map}"
     ],
-    "compression": "maximum",
     "mac": {
       "target": [
         {
@@ -73,8 +72,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "compression": "lzma"
+      "allowToChangeInstallationDirectory": true
     }
   }
 }
