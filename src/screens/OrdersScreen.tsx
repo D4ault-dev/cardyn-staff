@@ -10,6 +10,35 @@ import Img from '../components/Img'
 import { resolveUrl } from '../utils/resolveUrl'
 import './OrdersScreen.css'
 
+/** Copy an image URL to the system clipboard as an image (paste into WeChat/WhatsApp etc.) */
+async function copyImageToClipboard(url: string): Promise<void> {
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    // Normalise to PNG — ClipboardItem only accepts image/png in most browsers/Electron
+    const pngBlob = await new Promise<Blob>((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width  = img.naturalWidth
+        canvas.height = img.naturalHeight
+        canvas.getContext('2d')!.drawImage(img, 0, 0)
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('canvas toBlob failed')), 'image/png')
+      }
+      img.onerror = reject
+      img.src = URL.createObjectURL(blob)
+    })
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': pngBlob })
+    ])
+    return Promise.resolve()
+  } catch (e) {
+    console.error('[copyImage]', e)
+    return Promise.reject(e)
+  }
+}
+
 // Currency/country code → display label (handles both "US" and "USD" formats)
 const CURRENCY_COUNTRY: Record<string, string> = {
   // Short codes (actual DB values)
@@ -85,6 +114,13 @@ export default function OrdersScreen() {
   const [auditImgFile, setAuditImgFile] = useState<File | null>(null)
   const [submitting,   setSubmitting]   = useState(false)
   const [lightbox,     setLightbox]     = useState<string | null>(null)
+  const [copyMsg,      setCopyMsg]      = useState<string | null>(null)
+
+  function copyImg(url: string) {
+    copyImageToClipboard(url)
+      .then(() => { setCopyMsg('已复制！'); setTimeout(() => setCopyMsg(null), 2000) })
+      .catch(() => { setCopyMsg('复制失败'); setTimeout(() => setCopyMsg(null), 2000) })
+  }
   // Pending orders popup
   const [pendingPopup, setPendingPopup] = useState(false)
   const [pendingRows,  setPendingRows]  = useState<Order[]>([])
@@ -101,23 +137,16 @@ export default function OrdersScreen() {
       .catch(() => {})
   }, [])
 
-  // Poll pending count every 30s — useChatNotifications handles real-time alerts
+  // Poll pending count — handled globally by useChatNotifications in App.tsx
+  // No local timer needed here — avoids duplicate list?status=pending requests
   useEffect(() => {
-    function checkPending() {
-      client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
-        .then(r => {
-          const n = r.data.total || 0
-          setPendingCount(n)
-          if (n > prevPending.current && prevPending.current >= 0) {
-            setNewOrderFlash(true)
-            setTimeout(() => setNewOrderFlash(false), 3000)
-          }
-          prevPending.current = n
-        }).catch(() => {})
-    }
-    checkPending()
-    pendingTimer.current = setInterval(checkPending, 30000)
-    return () => { if (pendingTimer.current) clearInterval(pendingTimer.current) }
+    // Just fetch once on mount to show the initial badge
+    client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
+      .then(r => {
+        const n = r.data.total || 0
+        setPendingCount(n)
+        prevPending.current = n
+      }).catch(() => {})
   }, [])
 
   const load = useCallback((p: number) => {
@@ -504,9 +533,16 @@ export default function OrdersScreen() {
                 <div className="card-imgs-row">
                   {cardData.cardImage
                     ? cardData.cardImage.split(',').map((u, i) => (
-                        <Img key={i} src={resolveUrl(u.trim())} className="card-thumb"
-                          onClick={() => setLightbox(resolveUrl(u.trim()))} alt=""
-                          style={{ width: 100, height: 100 }} />
+                        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                          <Img src={resolveUrl(u.trim())} className="card-thumb"
+                            onClick={() => setLightbox(resolveUrl(u.trim()))} alt=""
+                            style={{ width: 100, height: 100 }} />
+                          <button
+                            onClick={() => copyImg(resolveUrl(u.trim()))}
+                            style={{ fontSize: 11, color: '#1677ff', background: 'none', border: '1px solid #1677ff', borderRadius: 4, padding: '1px 8px', cursor: 'pointer' }}>
+                            复制图片
+                          </button>
+                        </div>
                       ))
                     : <span className="no-img">暂无图片</span>
                   }
@@ -722,6 +758,15 @@ export default function OrdersScreen() {
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <img src={lightbox} className="lightbox-img" alt="" onClick={e => e.stopPropagation()} />
           <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
+          <button
+            onClick={e => { e.stopPropagation(); copyImg(lightbox) }}
+            style={{
+              position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+              background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '7px 22px',
+              borderRadius: 6, fontSize: 13, border: 'none', cursor: 'pointer', backdropFilter: 'blur(4px)',
+            }}>
+            {copyMsg || '复制图片'}
+          </button>
         </div>
       )}
     </div>

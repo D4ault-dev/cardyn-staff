@@ -89,22 +89,15 @@ export default function WithdrawalsScreen() {
 
   useEffect(() => { load(1); setPage(1) }, [status, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
-  // Poll pending count every 30s — useChatNotifications handles real-time alerts
+  // Poll pending count — handled globally by useChatNotifications in App.tsx
+  // Just fetch once on mount for the initial badge value
   useEffect(() => {
-    function check() {
-      client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
-        .then(r => {
-          const n = r.data.total || 0
-          setPendingCount(n)
-          if (n > prevPending.current && prevPending.current >= 0) {
-            setFlash(true); setTimeout(() => setFlash(false), 3000)
-          }
-          prevPending.current = n
-        }).catch(() => {})
-    }
-    check()
-    const t = setInterval(check, 30000)
-    return () => clearInterval(t)
+    client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
+      .then(r => {
+        const n = r.data.total || 0
+        setPendingCount(n)
+        prevPending.current = n
+      }).catch(() => {})
   }, [])
 
   async function submitPay() {

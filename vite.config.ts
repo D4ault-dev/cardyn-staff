@@ -1,23 +1,33 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Shared proxy options — secure:false avoids hard TLS failures on flaky connections
+// Shared proxy options
 const proxyTarget = {
-  target:      'https://api.cardyn.net',
-  changeOrigin: true,
-  secure:       false,   // don't reject on TLS cert issues in dev
-  proxyTimeout: 15000,   // 15s before giving up (default is 60s, too long)
-  timeout:      15000,
-}
-
-// WebSocket proxy — needs ws:true and long timeout
-const wsProxyTarget = {
-  target:      'https://api.cardyn.net',
+  target:       'https://api.cardyn.net',
   changeOrigin: true,
   secure:       false,
-  ws:           true,    // enable WebSocket proxying
-  proxyTimeout: 3600000, // 1 hour — keep WS alive
+  proxyTimeout: 20000,
+  timeout:      20000,
+  configure: (proxy: any) => {
+    proxy.on('error', (err: any) => {
+      // Suppress noisy TLS disconnect errors in dev — they're network blips, not bugs
+      if (err.code === 'ECONNRESET' || err.message?.includes('EPIPE') ||
+          err.message?.includes('TLS') || err.message?.includes('socket')) return
+      console.error('[proxy error]', err.message)
+    })
+  },
+}
+
+const wsProxyTarget = {
+  target:       'https://api.cardyn.net',
+  changeOrigin: true,
+  secure:       false,
+  ws:           true,
+  proxyTimeout: 3600000,
   timeout:      3600000,
+  configure: (proxy: any) => {
+    proxy.on('error', () => {}) // suppress WS errors — reconnects automatically
+  },
 }
 
 export default defineConfig({
@@ -35,5 +45,16 @@ export default defineConfig({
       '/files':   proxyTarget,
     },
   },
-  build: { outDir: 'dist' },
+  build: {
+    outDir: 'dist',
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+        }
+      }
+    }
+  },
 })

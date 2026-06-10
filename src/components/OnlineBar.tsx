@@ -14,7 +14,7 @@ export default function OnlineBar() {
 
   useEffect(() => {
     refresh()
-    const t = setInterval(refresh, 30000) // refresh every 30s (was 15s)
+    const t = setInterval(refresh, 60_000) // refresh every 60s — staff list rarely changes
     return () => clearInterval(t)
   }, [refresh])
 
@@ -38,7 +38,6 @@ export default function OnlineBar() {
                   </div>
               }
               <span className="ob-status-dot online" />
-              {s.userId === user?.userId && <span className="ob-you-dot" />}
             </div>
           ))}
           {online.length === 0 && <span className="ob-none">No one online</span>}
@@ -52,7 +51,7 @@ export default function OnlineBar() {
             Offline ({offline.length})
           </span>
           <div className="ob-avatars">
-            {offline.map(s => (
+            {offline.slice(0, 5).map(s => (
               <div key={s.id} className="ob-avatar-wrap" title={`${s.name} · last seen ${s.lastSeen || 'never'}`}>
                 {s.avatar
                   ? <img src={s.avatar} className="ob-avatar offline" alt={s.name} />

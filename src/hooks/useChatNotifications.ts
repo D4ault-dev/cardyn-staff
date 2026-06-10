@@ -12,105 +12,88 @@ export type NewChatNotification = {
 }
 
 export type NotificationEvent =
-  | { type: 'chat';       chats:       NewChatNotification[] }
-  | { type: 'order';      count:       number }
-  | { type: 'withdrawal'; count:       number }
+  | { type: 'chat';       chats: NewChatNotification[] }
+  | { type: 'order';      count: number }
+  | { type: 'withdrawal'; count: number }
 
-// ── Unified polling — one request every 8s instead of 3 requests every 5s ──
-// Reduces server load by 75% while keeping notifications responsive
+// ── Single poller — replaces all individual pending-count polls ───────────────
 export function useChatNotifications(
   onEvent: (event: NotificationEvent) => void
 ) {
   const { user } = useAuth()
-  const sinceRef        = useRef(Date.now())
-  const prevOrderCount  = useRef(-1)
-  const prevWdCount     = useRef(-1)
-  const timerRef        = useRef<ReturnType<typeof setInterval> | null>(null)
-  const inFlightRef     = useRef(false)  // prevent overlapping requests
+  const sinceRef       = useRef(Date.now())
+  const prevOrderRef   = useRef(-1)
+  const prevWdRef      = useRef(-1)
+  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null)
+  const inFlightRef    = useRef(false)
+  const failCountRef   = useRef(0)  // consecutive failures — back off when network is down
 
   const check = useCallback(async () => {
     if (!user || inFlightRef.current) return
     inFlightRef.current = true
     try {
-      // Single unified endpoint — one request instead of 3
-      const res = await client.get('/tuka/chat/admin/dashboard-poll', {
-        params: { since: sinceRef.current }
-      })
-      const data = res.data?.data || {}
+      const [orderRes, wdRes, chatRes] = await Promise.allSettled([
+        client.get('/tuka/order/list',      { params: { status: 'pending', pageSize: 1 } }),
+        client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } }),
+        client.get('/tuka/chat/admin/new-sessions', { params: { since: sinceRef.current } }),
+      ])
 
-      // New chat sessions
-      const newChats: NewChatNotification[] = data.newChats || []
-      if (newChats.length > 0) {
-        const maxTs = Math.max(...newChats.map((c: any) => c.createTs))
-        sinceRef.current = maxTs
-        playNewChat()
-        onEvent({ type: 'chat', chats: newChats })
+      // If all 3 failed — network is down, don't process
+      const allFailed = [orderRes, wdRes, chatRes].every(r => r.status === 'rejected')
+      if (allFailed) {
+        failCountRef.current++
+        return
+      }
+      failCountRef.current = 0  // reset on any success
+
+      if (orderRes.status === 'fulfilled') {
+        const n = orderRes.value.data?.total || 0
+        if (prevOrderRef.current >= 0 && n > prevOrderRef.current) {
+          playNewOrder()
+          onEvent({ type: 'order', count: n - prevOrderRef.current })
+        }
+        prevOrderRef.current = n
       }
 
-      // Pending orders delta
-      const orderCount = data.pendingOrders ?? 0
-      if (prevOrderCount.current >= 0 && orderCount > prevOrderCount.current) {
-        playNewOrder()
-        onEvent({ type: 'order', count: orderCount - prevOrderCount.current })
+      if (wdRes.status === 'fulfilled') {
+        const n = wdRes.value.data?.total || 0
+        if (prevWdRef.current >= 0 && n > prevWdRef.current) {
+          playNewWithdrawal()
+          onEvent({ type: 'withdrawal', count: n - prevWdRef.current })
+        }
+        prevWdRef.current = n
       }
-      prevOrderCount.current = orderCount
 
-      // Pending withdrawals delta
-      const wdCount = data.pendingWithdrawals ?? 0
-      if (prevWdCount.current >= 0 && wdCount > prevWdCount.current) {
-        playNewWithdrawal()
-        onEvent({ type: 'withdrawal', count: wdCount - prevWdCount.current })
-      }
-      prevWdCount.current = wdCount
-
-    } catch {
-      // Fallback: if unified endpoint doesn't exist yet, use individual calls
-      try {
-        const [chatRes, orderRes, wdRes] = await Promise.all([
-          client.get('/tuka/chat/admin/new-sessions', { params: { since: sinceRef.current } }),
-          client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } }),
-          client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } }),
-        ])
-
-        const newChats: NewChatNotification[] = chatRes.data?.data || []
+      if (chatRes.status === 'fulfilled') {
+        const newChats: NewChatNotification[] = chatRes.value.data?.data || []
         if (newChats.length > 0) {
           const maxTs = Math.max(...newChats.map(c => c.createTs))
           sinceRef.current = maxTs
           playNewChat()
           onEvent({ type: 'chat', chats: newChats })
         }
-
-        const orderCount = orderRes.data?.total || 0
-        if (prevOrderCount.current >= 0 && orderCount > prevOrderCount.current) {
-          playNewOrder()
-          onEvent({ type: 'order', count: orderCount - prevOrderCount.current })
-        }
-        prevOrderCount.current = orderCount
-
-        const wdCount = wdRes.data?.total || 0
-        if (prevWdCount.current >= 0 && wdCount > prevWdCount.current) {
-          playNewWithdrawal()
-          onEvent({ type: 'withdrawal', count: wdCount - prevWdCount.current })
-        }
-        prevWdCount.current = wdCount
-      } catch { /* silently ignore */ }
-    } finally {
-      inFlightRef.current = false
-    }
+      }
+    } catch { /* silently ignore */ }
+    finally { inFlightRef.current = false }
   }, [user, onEvent])
 
   useEffect(() => {
     if (!user) return
-    // Initial counts (no notification on first load) — parallel
-    Promise.all([
-      client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
-        .then(r => { prevOrderCount.current = r.data?.total || 0 }),
-      client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
-        .then(r => { prevWdCount.current = r.data?.total || 0 }),
-    ]).catch(() => {})
+    // Seed initial counts after a 3s delay — let login/page data load first
+    const seedTimer = setTimeout(() => {
+      Promise.allSettled([
+        client.get('/tuka/order/list',      { params: { status: 'pending', pageSize: 1 } })
+          .then(r => { prevOrderRef.current = r.data?.total || 0 }),
+        client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
+          .then(r => { prevWdRef.current = r.data?.total || 0 }),
+      ])
+    }, 3000)
 
-    // Poll every 8s instead of 5s — 37% fewer requests, still responsive
-    timerRef.current = setInterval(check, 8000)
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+    // Poll every 20s — was 10s, 3 requests × 3/min = 9 req/min → now 9 req/2min
+    timerRef.current = setInterval(check, 20_000)
+    return () => {
+      clearTimeout(seedTimer)
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
   }, [user, check])
 }

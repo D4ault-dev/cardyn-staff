@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { HashRouter, Routes, Route, Navigate, NavLink, useNavigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { useHeartbeat } from './hooks/useHeartbeat'
 import { useChatNotifications } from './hooks/useChatNotifications'
@@ -8,20 +8,50 @@ import OnlineBar from './components/OnlineBar'
 import ChatToast from './components/ChatToast'
 import type { ToastItem } from './components/ChatToast'
 import LoginScreen from './screens/LoginScreen'
-import DashboardScreen from './screens/DashboardScreen'
 import ChatScreen from './screens/ChatScreen'
 import OrdersScreen from './screens/OrdersScreen'
 import WithdrawalsScreen from './screens/WithdrawalsScreen'
 import UsersScreen from './screens/UsersScreen'
 import './App.css'
 
+// ── SVG icons for sidebar ─────────────────────────────────────────────────────
+const IconChat = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+)
+const IconOrders = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+    <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+  </svg>
+)
+const IconWithdraw = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+    <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+  </svg>
+)
+const IconUsers = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+  </svg>
+)
+const IconLogout = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+)
+
 function Shell() {
   const { user, loading, logout } = useAuth()
-  const [unread, setUnread]           = useState(0)
-  const [toasts, setToasts]           = useState<ToastItem[]>([])
+  const [unread,       setUnread]       = useState(0)
+  const [toasts,       setToasts]       = useState<ToastItem[]>([])
   const [pendingChatId, setPendingChatId] = useState<number | null>(null)
-  const [orderBadge,    setOrderBadge]    = useState(0)
-  const [wdBadge,       setWdBadge]       = useState(0)
+  const [orderBadge,   setOrderBadge]   = useState(0)
+  const [wdBadge,      setWdBadge]      = useState(0)
 
   useHeartbeat()
 
@@ -32,8 +62,8 @@ function Shell() {
         setToasts(prev => [...prev, {
           id:        `chat-${c.id}-${Date.now()}`,
           type:      'chat',
-          title:     '新客服请求',
-          message:   `${c.userName || `用户#${c.userId}`} 发起了对话${c.orderNo ? ` · ${c.orderNo}` : ''}`,
+          title:     'New Chat Request',
+          message:   `${c.userName || `User#${c.userId}`} started a conversation${c.orderNo ? ` · ${c.orderNo}` : ''}`,
           sessionId: c.id,
         }])
       })
@@ -42,94 +72,128 @@ function Shell() {
       setOrderBadge(prev => prev + event.count)
       setToasts(prev => [...prev, {
         id, type: 'order',
-        title:   '新订单待处理',
-        message: `有 ${event.count} 个新订单等待核销`,
+        title:   'New Order',
+        message: `${event.count} new order${event.count > 1 ? 's' : ''} waiting for review`,
       }])
     } else if (event.type === 'withdrawal') {
       setWdBadge(prev => prev + event.count)
       setToasts(prev => [...prev, {
         id, type: 'withdrawal',
-        title:   '新提现申请',
-        message: `有 ${event.count} 笔新提现申请待处理`,
+        title:   'New Withdrawal',
+        message: `${event.count} new withdrawal request${event.count > 1 ? 's' : ''}`,
       }])
     }
   }, [])
 
   useChatNotifications(handleNotification)
 
-  function dismissToast(id: string) {
-    setToasts(prev => prev.filter(t => t.id !== id))
-  }
-
-  function handleToastOpen(toast: ToastItem) {
-    if (toast.type === 'chat' && toast.sessionId) {
-      setPendingChatId(toast.sessionId)
-    }
-    // For order/withdrawal, navigation handled by NavLink click
-  }
-
   if (loading) return (
     <div className="app-loading">
       <div className="spinner" />
-      <span className="app-loading-text">Loading Cardyn Staff…</span>
+      <span className="app-loading-text">Loading…</span>
     </div>
   )
-  if (!user)   return <LoginScreen />
+  if (!user) return <LoginScreen />
+
+  const initials = (user.nickName || user.username || 'S')[0].toUpperCase()
 
   return (
     <div className="app-shell">
-      {/* Top navigation bar */}
-      <div className="top-nav">
-        <div className="top-nav-left">
-          {/* Brand */}
-          <div className="nav-brand">
-            <div className="nav-brand-logo">C</div>
-            <span className="nav-brand-name">Cardyn Staff</span>
-          </div>
-          <div className="nav-divider" />
-          <NavLink to="/dashboard"   className={({ isActive }) => 'tab-btn' + (isActive ? ' active' : '')}>数据概览</NavLink>
-          <NavLink to="/chat"        className={({ isActive }) => 'tab-btn' + (isActive ? ' active' : '')}>
-            客服中心{unread > 0 && <span className="tab-badge">{unread > 99 ? '99+' : unread}</span>}
-          </NavLink>
-          <NavLink to="/orders"      className={({ isActive }) => 'tab-btn' + (isActive ? ' active' : '')}
-            onClick={() => setOrderBadge(0)}>
-            核销中心{orderBadge > 0 && <span className="tab-badge orange">{orderBadge}</span>}
-          </NavLink>
-          <NavLink to="/withdrawals" className={({ isActive }) => 'tab-btn' + (isActive ? ' active' : '')}
-            onClick={() => setWdBadge(0)}>
-            提现中心{wdBadge > 0 && <span className="tab-badge orange">{wdBadge}</span>}
-          </NavLink>
-          <NavLink to="/users"       className={({ isActive }) => 'tab-btn' + (isActive ? ' active' : '')}>用户管理</NavLink>
+      {/* ── Left Sidebar ── */}
+      <aside className="sidebar">
+        {/* Logo */}
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-icon">C</div>
+          <span className="sidebar-logo-name">Cardyn Staff</span>
         </div>
-        <div className="top-nav-right">
-          <div className="nav-user">
-            <div className="nav-avatar">{(user.nickName || user.username)[0].toUpperCase()}</div>
-            <div className="nav-user-info">
-              <span className="nav-username">{user.nickName || user.username}</span>
-              <span className="nav-role">{user.roleType}</span>
+
+        {/* Navigation */}
+        <nav className="sidebar-nav">
+          <NavLink
+            to="/chat"
+            className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+          >
+            <span className="nav-icon"><IconChat /></span>
+            <span className="nav-label">Live Chat</span>
+            {unread > 0 && <span className="nav-badge">{unread > 99 ? '99+' : unread}</span>}
+          </NavLink>
+
+          <NavLink
+            to="/orders"
+            className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+            onClick={() => setOrderBadge(0)}
+          >
+            <span className="nav-icon"><IconOrders /></span>
+            <span className="nav-label">Orders</span>
+            {orderBadge > 0 && <span className="nav-badge orange">{orderBadge}</span>}
+          </NavLink>
+
+          <NavLink
+            to="/withdrawals"
+            className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+            onClick={() => setWdBadge(0)}
+          >
+            <span className="nav-icon"><IconWithdraw /></span>
+            <span className="nav-label">Withdrawals</span>
+            {wdBadge > 0 && <span className="nav-badge orange">{wdBadge}</span>}
+          </NavLink>
+
+          <NavLink
+            to="/users"
+            className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+          >
+            <span className="nav-icon"><IconUsers /></span>
+            <span className="nav-label">Users</span>
+          </NavLink>
+        </nav>
+
+        {/* Footer: user info + logout */}
+        <div className="sidebar-footer">
+          <div className="sidebar-user">
+            <div className="sidebar-avatar">{initials}</div>
+            <div className="sidebar-user-info">
+              <div className="sidebar-name">{user.nickName || user.username}</div>
+              <div className="sidebar-role">{user.roleType}</div>
             </div>
           </div>
-          <button className="nav-logout" onClick={logout}>退出</button>
+          <button className="sidebar-logout" onClick={logout}>
+            <IconLogout />
+            Sign out
+          </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Online staff bar */}
-      <OnlineBar />
+      {/* ── Main content ── */}
+      <div className="app-main">
+        {/* Online staff bar */}
+        <OnlineBar />
 
-      {/* Main content */}
-      <main className="app-main">
+        {/* Screen content */}
         <Routes>
-          <Route path="/"            element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard"   element={<DashboardScreen />} />
-          <Route path="/chat"        element={<ChatScreen onUnreadChange={setUnread} autoOpenSessionId={pendingChatId} onAutoOpenDone={() => setPendingChatId(null)} />} />
+          <Route path="/"            element={<Navigate to="/orders" replace />} />
+          <Route path="/chat"        element={
+            <ChatScreen
+              onUnreadChange={setUnread}
+              autoOpenSessionId={pendingChatId}
+              onAutoOpenDone={() => setPendingChatId(null)}
+            />
+          } />
           <Route path="/orders"      element={<OrdersScreen />} />
           <Route path="/withdrawals" element={<WithdrawalsScreen />} />
           <Route path="/users"       element={<UsersScreen />} />
         </Routes>
-      </main>
+      </div>
 
       {/* Toast notifications */}
-      <ChatToast toasts={toasts} onDismiss={dismissToast} onOpen={handleToastOpen} />
+      <ChatToast
+        toasts={toasts}
+        onDismiss={id => setToasts(prev => prev.filter(t => t.id !== id))}
+        onOpen={toast => {
+          if (toast.type === 'chat' && toast.sessionId) {
+            setPendingChatId(toast.sessionId)
+          }
+        }}
+      />
     </div>
   )
 }

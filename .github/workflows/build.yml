@@ -6,31 +6,49 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-mac:
+  build-mac-arm:
     runs-on: macos-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Install dependencies
         run: npm install --legacy-peer-deps
-
-      - name: Build Vite + Electron (macOS)
-        run: npm run electron:build
+      - name: Build (macOS Apple Silicon)
+        run: npm run build && npx electron-builder --mac --arm64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload macOS artifact
+      - name: Upload mac-arm artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cardyn-staff-mac
+          name: cardyn-staff-mac-arm64
+          path: dist-electron/*.dmg
+          if-no-files-found: warn
+
+  build-mac-intel:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+      - name: Build (macOS Intel)
+        run: npm run build && npx electron-builder --mac --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Upload mac-intel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cardyn-staff-mac-x64
           path: dist-electron/*.dmg
           if-no-files-found: warn
 
@@ -40,20 +58,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Install dependencies
         run: npm install --legacy-peer-deps
-
-      - name: Build Vite + Electron (Windows)
+      - name: Build (Windows x64)
         run: npm run electron:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
@@ -62,9 +76,8 @@ jobs:
           if-no-files-found: warn
 
   release:
-    needs: [build-mac, build-windows]
+    needs: [build-mac-arm, build-mac-intel, build-windows]
     runs-on: ubuntu-latest
-    # Run on every push to main — not just on tags
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     permissions:
       contents: write
@@ -78,17 +91,23 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION-build.${{ github.run_number }}" >> $GITHUB_OUTPUT
 
-      - name: Download Mac artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: cardyn-staff-mac
           path: release/
+          merge-multiple: true
 
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: cardyn-staff-windows
-          path: release/
+      - name: Rename artifacts clearly
+        run: |
+          cd release
+          for f in *.dmg; do
+            if [[ "$f" == *arm64* ]]; then
+              mv "$f" "Cardyn-Staff-mac-AppleSilicon.dmg" 2>/dev/null || true
+            elif [[ "$f" == *x64* ]] || [[ "$f" == *64* ]]; then
+              mv "$f" "Cardyn-Staff-mac-Intel.dmg" 2>/dev/null || true
+            fi
+          done
+          ls -la
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -96,15 +115,16 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: "Cardyn Staff v${{ steps.version.outputs.version }} (build ${{ github.run_number }})"
           body: |
-            ## Cardyn Staff Desktop
+            ## Cardyn Staff Desktop v${{ steps.version.outputs.version }}
 
-            **Version:** ${{ steps.version.outputs.version }}
-            **Build:** ${{ github.run_number }}
-            **Commit:** ${{ github.sha }}
+            ### 下载 / Downloads
+            | 平台 | 文件 | 说明 |
+            |------|------|------|
+            | 🍎 Mac (Apple Silicon M1/M2/M3) | `Cardyn-Staff-mac-AppleSilicon.dmg` | 新款Mac |
+            | 🍎 Mac (Intel) | `Cardyn-Staff-mac-Intel.dmg` | 老款Mac |
+            | 🪟 Windows | `Cardyn Staff Setup *.exe` | Windows 10/11 |
 
-            ### Downloads
-            - **macOS** — `.dmg` (Universal: Intel + Apple Silicon)
-            - **Windows** — `.exe` (64-bit NSIS installer)
+            **Build:** ${{ github.run_number }} | **Commit:** ${{ github.sha }}
           files: release/*
           generate_release_notes: false
         env:

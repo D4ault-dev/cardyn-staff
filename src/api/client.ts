@@ -65,7 +65,7 @@ const _inflight = new Map<string, Promise<any>>()
 // ── Axios instance ────────────────────────────────────────────────────────────
 const client = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,  // 10s — appropriate for a staff panel
+  timeout: 8000,  // 8s — reduced from 10s, fail faster on bad network
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -141,7 +141,8 @@ function delay(ms: number) {
 
 function isNetworkError(err: any): boolean {
   // Network errors have no response (timeout, DNS failure, connection refused)
-  return !err.response && err.message !== 'canceled'
+  // ETIMEDOUT means server unreachable — don't retry, fail immediately
+  return !err.response && err.message !== 'canceled' && !err.message?.includes('ETIMEDOUT')
 }
 
 /**

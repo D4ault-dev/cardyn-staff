@@ -21,7 +21,7 @@ export const getSessions = (
       client
         .get('/tuka/chat/admin/sessions', { params: { status, pageSize: 100 } })
         .then(r => (r.data.rows || []) as ChatSession[]),
-    { onFresh: options.onFresh, ttl: options.ttl ?? 2000 },  // 2s TTL — matches the active-chat poll interval
+    { onFresh: options.onFresh, ttl: options.ttl ?? 5000 },  // 5s TTL — reduced from 2s
   )
 
 export const getMessages = (sessionId: number) =>

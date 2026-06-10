@@ -11,6 +11,24 @@ import { playNewMessage } from '../utils/sound'
 import { resolveUrl } from '../utils/resolveUrl'
 import './ChatScreen.css'
 
+async function copyImageToClipboard(url: string): Promise<void> {
+  const res = await fetch(url)
+  const blob = await res.blob()
+  const pngBlob = await new Promise<Blob>((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+      canvas.getContext('2d')!.drawImage(img, 0, 0)
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png')
+    }
+    img.onerror = reject
+    img.src = URL.createObjectURL(blob)
+  })
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })])
+}
+
 type UserProfile = {
   userId: number; phone: string; email: string; realName: string
   avatar: string | null; balance: number; totalSales: number
@@ -41,6 +59,13 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
   const [loadingMsg,   setLoadingMsg]   = useState(false)
   const [showProfile,  setShowProfile]  = useState(false)
   const [lightbox,     setLightbox]     = useState<string | null>(null)
+  const [copyMsg,      setCopyMsg]      = useState<string | null>(null)
+
+  function copyImg(url: string) {
+    copyImageToClipboard(url)
+      .then(() => { setCopyMsg('已复制！'); setTimeout(() => setCopyMsg(null), 2000) })
+      .catch(() => { setCopyMsg('复制失败'); setTimeout(() => setCopyMsg(null), 2000) })
+  }
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferTo,   setTransferTo]   = useState('')
   const [transferring, setTransferring] = useState(false)
@@ -112,9 +137,9 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
 
   useEffect(() => {
     loadSessions()
-    // Refresh session list every 2s when a chat is open (unread counts update),
-    // every 8s otherwise to save bandwidth
-    const interval = active ? 2000 : 8000
+    // Refresh session list every 15s when a chat is open,
+    // every 30s otherwise to save bandwidth
+    const interval = active ? 15000 : 30000
     const t = setInterval(loadSessions, interval)
     return () => clearInterval(t)
   }, [loadSessions, active])
@@ -143,11 +168,15 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
       scrollBottom()
       // Fallback poll — only runs when WebSocket is disconnected
       if (pollRef.current) clearInterval(pollRef.current)
+      let pollInFlight = false
       pollRef.current = setInterval(() => {
         // Skip poll if WS is connected — WS handles delivery
         if (wsRef.current?.isConnected) return
+        // Skip if previous poll still pending — prevents pile-up
+        if (pollInFlight) return
         const sid = activeSessionIdRef.current
         if (!sid) return
+        pollInFlight = true
         pollSession(sid, lastIdRef.current).then(result => {
           if (result.messages.length > 0) {
             lastIdRef.current = result.messages[result.messages.length - 1].id
@@ -169,7 +198,8 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
             return prev
           })
         }).catch(() => {})
-      }, 1500)
+          .finally(() => { pollInFlight = false })
+      }, 5000)  // 5s fallback — was 1.5s, only used when WS is down
     }).finally(() => setLoadingMsg(false))
     getUserOrders(s.id).then(setOrders).catch(() => {})
     getUserProfile(s.id).then(p => { if (p) setProfile(p) }).catch(() => {})
@@ -477,11 +507,6 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
                 rows={2} />
               <div className="input-actions">
-                <label className="act-icon-btn" title="表情">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
-                    <circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
-                  </svg>
-                </label>
                 <label className="act-icon-btn img-label" title="发送图片">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
                     <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
@@ -517,6 +542,15 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <img src={lightbox} className="lightbox-img" alt="" onClick={e => e.stopPropagation()} />
           <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
+          <button
+            onClick={e => { e.stopPropagation(); copyImg(lightbox) }}
+            style={{
+              position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+              background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '7px 22px',
+              borderRadius: 6, fontSize: 13, border: 'none', cursor: 'pointer', backdropFilter: 'blur(4px)',
+            }}>
+            {copyMsg || '复制图片'}
+          </button>
         </div>
       )}
 

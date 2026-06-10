@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "axios": "^1.15.2",
-    "echarts": "^6.0.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-is": "^19.2.6",
@@ -43,15 +42,20 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!dist/**/*.map",
+      "!**/*.{ts,tsx,js.map}"
     ],
+    "compression": "maximum",
     "mac": {
       "target": [
         {
           "target": "dmg",
-          "arch": [
-            "universal"
-          ]
+          "arch": ["arm64"]
+        },
+        {
+          "target": "dmg",
+          "arch": ["x64"]
         }
       ],
       "category": "public.app-category.business"
@@ -60,9 +64,7 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ]
     },
@@ -71,7 +73,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "compression": "lzma"
     }
   }
 }
