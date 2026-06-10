@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { getUsers, setUserStatus } from '../api/users'
 import type { AppUser } from '../types'
 import { useAuth } from '../context/AuthContext'
-import { ROLES } from '../utils/roles'
+import { ROLES, isSuper } from '../utils/roles'
 import DateRangePicker from '../components/DateRangePicker'
 import './OrdersScreen.css'
 import './UsersScreen.css'
@@ -15,7 +15,7 @@ function statusColor(s: number) { return s === 1 ? '#52c41a' : '#ff4d4f' }
 
 export default function UsersScreen() {
   const { user } = useAuth()
-  const canManage = user?.roleType === ROLES.SUPER || user?.roleType === ROLES.FINANCE
+  const canManage = isSuper(user?.roleType || '')
 
   const [rows,    setRows]    = useState<AppUser[]>([])
   const [total,   setTotal]   = useState(0)

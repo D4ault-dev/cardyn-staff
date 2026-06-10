@@ -5,6 +5,7 @@ import {
 } from '../api/chat'
 import type { ChatSession, ChatMessage, UserOrder } from '../types'
 import { useAuth } from '../context/AuthContext'
+import { canHandleChat } from '../utils/roles'
 import { ChatWebSocket } from '../api/ws'
 import client from '../api/client'
 import { playNewMessage } from '../utils/sound'
@@ -310,8 +311,8 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
   }
 
   const isAssigned  = active?.agentId === myUserId
-  const canReply    = active?.status === 'claimed' && isAssigned
-  const canClaim    = active?.status === 'open'
+  const canReply    = active?.status === 'claimed' && isAssigned && canHandleChat(user?.roleType || '')
+  const canClaim    = active?.status === 'open' && canHandleChat(user?.roleType || '')
 
   // Smart timestamp: show time only for today, date+time for older messages
   function formatMsgTime(t: string | undefined) {
