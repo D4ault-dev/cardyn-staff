@@ -305,6 +305,7 @@ export default function OrdersScreen() {
               <th>面值</th>
               <th>数量</th>
               <th>结算金额</th>
+              <th>处理人</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -320,7 +321,7 @@ export default function OrdersScreen() {
                 ))}
               </>
             )}
-            {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={10} className="table-empty">暂无数据</td></tr>}
+            {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={11} className="table-empty">暂无数据</td></tr>}
             {!(loading && firstLoad) && rows.map(r => (
               <tr key={r.id} className={r.status === 'pending' ? 'row-pending' : ''}>
                 <td>{r.id}</td>
@@ -332,6 +333,9 @@ export default function OrdersScreen() {
                 <td className="amount-green">{currSym(r.cardCurrency)}{r.cardAmount}</td>
                 <td>{r.quantity ?? 0}</td>
                 <td className="amount-red">{fmtNgn(r.ngnAmount)}</td>
+                <td style={{ fontSize: 11, color: (r as any).staffName ? '#1677ff' : '#bbb' }}>
+                  {(r as any).staffName || '—'}
+                </td>
                 <td>
                   <div className="action-btns">
                     <button className="act-btn blue" onClick={() => setVerifyData(r)}>查看数据</button>
