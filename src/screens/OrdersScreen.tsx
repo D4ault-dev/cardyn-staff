@@ -3,7 +3,7 @@ import { getOrders, auditOrder } from '../api/orders'
 import type { Order } from '../types'
 import client, { clearClientCacheByUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import { canVerifyOrders } from '../utils/roles'
+import { canVerifyOrders, isSuper } from '../utils/roles'
 import { playSuccess, playError } from '../utils/sound'
 import DateRangePicker from '../components/DateRangePicker'
 import Img from '../components/Img'
@@ -340,7 +340,21 @@ export default function OrdersScreen() {
                   <div className="action-btns">
                     <button className="act-btn blue" onClick={() => setVerifyData(r)}>查看数据</button>
                     <button className="act-btn green" onClick={() => setCardData(r)}>查看</button>
-                    {canVerify && (r.status === 'pending' || r.status === 'processing') ? (
+                    {canVerify && r.status === 'pending' ? (
+                      <>
+                        <button className="act-btn primary"
+                          onClick={() => { setAuditRow(r); setAuditResult('paid'); setAuditRemark('') }}>
+                          核销完成
+                        </button>
+                        <button className="act-btn danger"
+                          onClick={() => { setAuditRow(r); setAuditResult('rejected'); setAuditRemark('') }}>
+                          失败
+                        </button>
+                      </>
+                    ) : canVerify && r.status === 'processing' && (
+                        isSuper(user?.roleType || '') ||
+                        String((r as any).staffId) === String(user?.userId)
+                      ) ? (
                       <>
                         <button className="act-btn primary"
                           onClick={() => { setAuditRow(r); setAuditResult('paid'); setAuditRemark('') }}>
