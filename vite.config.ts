@@ -43,6 +43,7 @@ export default defineConfig({
       '/logout':  proxyTarget,
       '/common':  proxyTarget,
       '/files':   proxyTarget,
+      '/profile': proxyTarget,
     },
   },
   build: {
