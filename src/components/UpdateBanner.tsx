@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
-type UpdateState = 'idle' | 'available' | 'downloading' | 'ready'
+type UpdateState = 'idle' | 'available' | 'ready'
 
 declare global {
   interface Window {
@@ -17,115 +17,78 @@ declare global {
 }
 
 export default function UpdateBanner() {
-  const [state, setState]     = useState<UpdateState>('idle')
-  const [version, setVersion] = useState('')
-  const [checking, setChecking] = useState(false)
+  const [state,    setState]   = useState<UpdateState>('idle')
+  const [newVer,   setNewVer]  = useState('')
+  const [currVer,  setCurrVer] = useState('')
 
   useEffect(() => {
+    // Get current version to display
+    window.electron?.getAppVersion?.().then(v => setCurrVer(v)).catch(() => {})
+
     const el = window.electron
     if (!el) return
 
-    el.onUpdateAvailable?.(() => {
-      setState('available')
-      setChecking(false)
-    })
-    el.onUpdateDownloaded?.((v) => {
-      setState('ready')
-      setVersion(v || '')
-    })
-    el.onUpdateError?.(() => {
-      setChecking(false)
-    })
+    el.onUpdateAvailable?.(() => setState('available'))
+    el.onUpdateDownloaded?.((v) => { setState('ready'); setNewVer(v || '') })
+    el.onUpdateError?.(() => setState('idle'))
   }, [])
 
-  function handleCheck() {
-    setChecking(true)
-    window.electron?.checkForUpdate?.()
-    // Reset checking after 10s if no response
-    setTimeout(() => setChecking(false), 10_000)
-  }
-
-  function handleInstall() {
-    window.electron?.installUpdate?.()
-  }
-
-  // Don't render anything in browser / dev
+  // Not in Electron — don't render
   if (!window.electron?.installUpdate) return null
 
-  // Update ready to install
-  if (state === 'ready') {
-    return (
-      <div style={styles.banner('#16a34a')}>
-        <span>新版本 {version} 已下载完成，点击安装更新</span>
-        <button style={styles.btn('#fff', '#15803d')} onClick={handleInstall}>
-          立即更新
-        </button>
-      </div>
-    )
-  }
+  if (state === 'ready') return (
+    <div style={banner('#16a34a')}>
+      <span>新版本 {newVer} 已准备好，点击安装</span>
+      <button style={btn} onClick={() => window.electron?.installUpdate?.()}>立即安装</button>
+    </div>
+  )
 
-  // Update available — downloading
-  if (state === 'available') {
-    return (
-      <div style={styles.banner('#2563eb')}>
-        <span>新版本下载中...</span>
-      </div>
-    )
-  }
+  if (state === 'available') return (
+    <div style={banner('#2563eb')}>
+      <span>正在下载新版本…</span>
+    </div>
+  )
 
-  // Idle — show manual check button
+  // Idle — show version number + check button
   return (
-    <div style={styles.checkWrap}>
-      <button
-        style={styles.checkBtn}
-        onClick={handleCheck}
-        disabled={checking}
-        title="检查更新"
-      >
-        {checking ? '检查中…' : '检查更新'}
+    <div style={versionBar}>
+      {currVer && <span style={verText}>v{currVer}</span>}
+      <button style={checkBtn} onClick={() => {
+        setState('available')
+        window.electron?.checkForUpdate?.()
+        // Reset to idle after 15s if no update found
+        setTimeout(() => setState('idle'), 15_000)
+      }}>
+        检查更新
       </button>
     </div>
   )
 }
 
-const styles = {
-  banner: (bg: string) => ({
-    position: 'fixed' as const,
-    bottom: 0, left: 0, right: 0,
-    background: bg,
-    color: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: '10px 16px',
-    fontSize: 13,
-    fontWeight: 600,
-    zIndex: 9999,
-  }),
-  btn: (color: string, bg: string) => ({
-    background: bg,
-    color,
-    border: 'none',
-    borderRadius: 6,
-    padding: '5px 16px',
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-  }),
-  checkWrap: {
-    position: 'fixed' as const,
-    bottom: 12,
-    right: 12,
-    zIndex: 9999,
-  },
-  checkBtn: {
-    background: 'rgba(0,0,0,0.15)',
-    color: '#94a3b8',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 6,
-    padding: '4px 10px',
-    fontSize: 11,
-    cursor: 'pointer',
-  },
+const banner = (bg: string): React.CSSProperties => ({
+  position: 'fixed', bottom: 0, left: 0, right: 0,
+  background: bg, color: '#fff',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  gap: 12, padding: '8px 16px', fontSize: 13, fontWeight: 600, zIndex: 9999,
+})
+
+const btn: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.2)', color: '#fff',
+  border: '1px solid rgba(255,255,255,0.4)',
+  borderRadius: 4, padding: '3px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+}
+
+const versionBar: React.CSSProperties = {
+  position: 'fixed', bottom: 10, right: 12, zIndex: 9999,
+  display: 'flex', alignItems: 'center', gap: 8,
+}
+
+const verText: React.CSSProperties = {
+  fontSize: 11, color: '#bbb',
+}
+
+const checkBtn: React.CSSProperties = {
+  background: '#fff', color: '#999',
+  border: '1px solid #e8e8e8',
+  borderRadius: 4, padding: '3px 10px', fontSize: 11, cursor: 'pointer',
 }

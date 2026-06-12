@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { getWithdrawals, approveWithdrawal, rejectWithdrawal } from '../api/withdrawals'
+import { invalidatePrefix } from '../api/cache'
 import type { Withdrawal } from '../types'
 import { useAuth } from '../context/AuthContext'
 import { canProcessPayments } from '../utils/roles'
@@ -40,15 +41,24 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   processing:{ label: '处理中', color: '#1677ff' },
 }
 
-export default function WithdrawalsScreen() {
+export default function WithdrawalsScreen({
+  globalPendingCount = 0,
+  newWdAlert = false,
+  onAlertDismissed,
+  onPendingCountChange,
+}: {
+  globalPendingCount?: number
+  newWdAlert?: boolean
+  onAlertDismissed?: () => void
+  onPendingCountChange?: (n: number) => void
+}) {
   const { user } = useAuth()
   const isPayer = canProcessPayments(user?.roleType || '')
 
   const [rows,       setRows]       = useState<Withdrawal[]>([])
   const [total,      setTotal]      = useState(0)
-  const [pendingCount, setPendingCount] = useState(0)
   const [page,       setPage]       = useState(1)
-  const pageSize = 10
+  const [pageSize, setPageSize] = useState(10)
   const [loading,    setLoading]    = useState(false)
   const [firstLoad,  setFirstLoad]  = useState(true)
   const [status,     setStatus]     = useState('')  // default all
@@ -63,9 +73,7 @@ export default function WithdrawalsScreen() {
   const [receiptFile,setReceiptFile]= useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [lightbox,   setLightbox]   = useState<string | null>(null)
-  const [flash,      setFlash]      = useState(false)
   const [configFee,  setConfigFee]  = useState(50)  // fetched from system config
-  const prevPending = useRef(0)
 
   // Fetch withdrawal fee from system config on mount
   useEffect(() => {
@@ -89,16 +97,26 @@ export default function WithdrawalsScreen() {
 
   useEffect(() => { load(1); setPage(1) }, [status, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
-  // Poll pending count — handled globally by useChatNotifications in App.tsx
-  // Just fetch once on mount for the initial badge value
+  // Auto-jump to pending tab when a new withdrawal alert arrives
   useEffect(() => {
-    client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
-      .then(r => {
-        const n = r.data.total || 0
-        setPendingCount(n)
-        prevPending.current = n
-      }).catch(() => {})
-  }, [])
+    if (newWdAlert) {
+      setStatus('pending')
+      onAlertDismissed?.()
+    }
+  }, [newWdAlert]) // eslint-disable-line
+
+  // Silent background auto-refresh every 8s with cache invalidation
+  useEffect(() => {
+    const silentLoad = () => {
+      invalidatePrefix('withdrawals:')
+      getWithdrawals({ pageNum: page, pageSize, status: status || undefined,
+        startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
+        endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
+      }).then(r => { setRows(r.rows); setTotal(r.total) }).catch(() => {})
+    }
+    const t = setInterval(silentLoad, 8_000)
+    return () => clearInterval(t)
+  }, [page, pageSize, status, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   async function submitPay() {
     if (!payModal) return
@@ -118,7 +136,7 @@ export default function WithdrawalsScreen() {
       setPayModal(null); setRemark(''); setReceiptFile(null)
       load(page)
       client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
-        .then(r => { const n = r.data.total || 0; setPendingCount(n); prevPending.current = n })
+        .then(r => { onPendingCountChange?.(r.data.total || 0) })
     } catch (e: any) { alert(e.message) }
     finally { setSubmitting(false) }
   }
@@ -165,13 +183,13 @@ export default function WithdrawalsScreen() {
             onChange={(s, e, st, et) => { setStartDate(s); setEndDate(e); setStartTime(st); setEndTime(et) }}
             onClear={() => { setStartDate(''); setEndDate(''); setStartTime(''); setEndTime('') }}
           />
-          <button className="icon-btn-sm" onClick={() => load(page)} title="刷新">↻</button>
+          <button className="icon-btn-sm" onClick={() => { setStatus(''); setStartDate(''); setEndDate(''); setStartTime(''); setEndTime('') }} title="重置">✕</button>
         </div>
         <div className="toolbar-right">
           {isPayer && (
-            <button className={'pending-btn' + (flash ? ' flash' : '')} onClick={() => setStatus('pending')}>
+            <button className="pending-btn" onClick={() => setStatus('pending')}>
               待付款申请
-              {pendingCount > 0 && <span className={'pending-badge' + (flash ? ' flash' : '')}>{pendingCount}</span>}
+              {globalPendingCount > 0 && <span className="pending-badge">{globalPendingCount}</span>}
             </button>
           )}
           {!isPayer && (
@@ -205,7 +223,7 @@ export default function WithdrawalsScreen() {
             {!(loading && firstLoad) && rows.map(r => {
               const st = STATUS_MAP[r.status] || { label: r.status, color: '#999' }
               return (
-                <tr key={r.id} className={r.status === 'pending' ? 'row-pending' : ''}>
+                <tr key={r.id}>
                   <td>{r.id}</td>
                   <td>{r.username || r.userId}</td>
                   <td className="mono">{r.withdrawNo}</td>
@@ -251,7 +269,13 @@ export default function WithdrawalsScreen() {
             : <button key={p} className={'pg-btn' + (p === page ? ' current' : '')} onClick={() => goPage(p as number)}>{p}</button>
         )}
         <button className="pg-btn" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>›</button>
-        <span className="pg-size">10 / page</span>
+        <select
+          className="pg-size-select"
+          value={pageSize}
+          onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+        >
+          {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / page</option>)}
+        </select>
       </div>
 
       {/* Detail modal — all roles can view */}

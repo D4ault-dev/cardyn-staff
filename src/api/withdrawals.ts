@@ -17,7 +17,7 @@ export const getWithdrawals = (
     key,
     () =>
       client
-        .get('/tuka/withdrawal/list', { params: { pageSize: 20, ...params } })
+        .get('/tuka/withdrawal/list', { params })
         .then(r => ({ rows: (r.data.rows || []) as Withdrawal[], total: r.data.total as number })),
     { onFresh: options.onFresh },
   )

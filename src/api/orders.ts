@@ -17,15 +17,13 @@ export const getOrders = (
     key,
     () =>
       client
-        .get('/tuka/order/list', { params: { pageSize: 20, ...params } })
+        .get('/tuka/order/list', { params })
         .then(r => ({ rows: (r.data.rows || []) as Order[], total: r.data.total as number })),
     { onFresh: options.onFresh },
   )
 }
 
 export const auditOrder = (id: number, status: 'paid' | 'rejected', verifyRemark = '', verifyImage = '') => {
-  // Invalidate BOTH the SWR cache and the axios-level GET cache so the
-  // table reloads fresh data immediately after accept / reject
   invalidatePrefix('orders:')
   clearClientCacheByUrl('/tuka/order/list')
   return client.put('/tuka/order/audit', { id, status, verifyRemark, verifyImage })

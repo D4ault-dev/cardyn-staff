@@ -26,16 +26,15 @@ export default function LoginScreen() {
     <div className="login-root">
       <div className="login-card">
         <div className="login-logo">
-          <img src="/icon.png" alt="logo" style={{ width: 36, height: 36, borderRadius: 8 }}
-            onError={(e) => { e.currentTarget.style.display='none' }} />
+          <div className="top-nav-logo-icon" style={{ width: 28, height: 28, borderRadius: 6, background: '#1677ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, color: '#fff' }}>C</div>
           <span className="logo-text">Cardyn Staff</span>
         </div>
-        <p className="login-sub">Customer Service Dashboard</p>
+        <p className="login-sub">客服管理系统</p>
 
         <form onSubmit={handleLogin} className="login-form">
           <input
             className="login-input"
-            placeholder="Username"
+            placeholder="用户名"
             value={username}
             onChange={e => setUsername(e.target.value)}
             autoFocus
@@ -44,7 +43,7 @@ export default function LoginScreen() {
           <input
             className="login-input"
             type="password"
-            placeholder="Password"
+            placeholder="密码"
             value={password}
             onChange={e => setPassword(e.target.value)}
             disabled={loading}
@@ -54,9 +53,9 @@ export default function LoginScreen() {
             {loading ? (
               <span className="login-btn-inner">
                 <span className="spinner-sm" />
-                Signing in…
+                登录中…
               </span>
-            ) : 'Sign In'}
+            ) : '登录'}
           </button>
         </form>
       </div>

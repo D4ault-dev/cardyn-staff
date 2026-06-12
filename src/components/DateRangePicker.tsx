@@ -114,7 +114,6 @@ export default function DateRangePicker({
       {/* Trigger button */}
       <button className={'drp-trigger' + (open ? ' active' : '') + (startDate ? ' has-value' : '')}
         onClick={openPicker}>
-        <span className="drp-clock">🕐</span>
         <span className="drp-label">{label}</span>
         {startDate && (
           <span className="drp-clear-x" onClick={e => { e.stopPropagation(); clear() }}>✕</span>

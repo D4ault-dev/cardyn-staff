@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { getOrders, auditOrder } from '../api/orders'
+import { invalidatePrefix } from '../api/cache'
 import type { Order } from '../types'
 import client, { clearClientCacheByUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -85,15 +86,24 @@ function CodeRow({ index, code }: { index: number; code: string }) {
   )
 }
 
-export default function OrdersScreen() {
+export default function OrdersScreen({
+  globalPendingCount = 0,
+  newOrderAlert = false,
+  onAlertDismissed,
+  onPendingCountChange,
+}: {
+  globalPendingCount?: number
+  newOrderAlert?: boolean
+  onAlertDismissed?: () => void
+  onPendingCountChange?: (n: number) => void
+}) {
   const { user } = useAuth()
   const canVerify = canVerifyOrders(user?.roleType || '')
 
   const [rows,         setRows]         = useState<Order[]>([])
   const [total,        setTotal]        = useState(0)
-  const [pendingCount, setPendingCount] = useState(0)
   const [page,         setPage]         = useState(1)
-  const pageSize = 10
+  const [pageSize, setPageSize] = useState(10)
   const [loading,      setLoading]      = useState(false)
   const [firstLoad,    setFirstLoad]    = useState(true)
   const [countries,    setCountries]    = useState<string[]>([])
@@ -129,7 +139,6 @@ export default function OrdersScreen() {
   const [claiming,     setClaiming]     = useState<number | null>(null)
   const pendingTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const prevPending  = useRef(0)
-  const [newOrderFlash, setNewOrderFlash] = useState(false)
 
   // Load countries
   useEffect(() => {
@@ -138,29 +147,28 @@ export default function OrdersScreen() {
       .catch(() => {})
   }, [])
 
-  // Poll pending count — handled globally by useChatNotifications in App.tsx
-  // No local timer needed here — avoids duplicate list?status=pending requests
+  // Auto-open popup when a new order alert fires from global polling
   useEffect(() => {
-    // Just fetch once on mount to show the initial badge
-    client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
-      .then(r => {
-        const n = r.data.total || 0
-        setPendingCount(n)
-        prevPending.current = n
-      }).catch(() => {})
-  }, [])
+    if (newOrderAlert) {
+      loadPendingPopup()
+      setPendingPopup(true)
+      onAlertDismissed?.()
+    }
+  }, [newOrderAlert]) // eslint-disable-line
 
   // Auto-refresh pending popup every 5s while it's open
   useEffect(() => {
     if (!pendingPopup) return
     loadPendingPopup()
-    const t = setInterval(loadPendingPopup, 5_000)
+    const t = setInterval(loadPendingPopup, 3_000)
     return () => clearInterval(t)
   }, [pendingPopup]) // eslint-disable-line
 
-  // Silent background auto-refresh of order table every 10s — no loading spinner
+  // Silent background auto-refresh every 8s — invalidates SWR cache so data is always fresh
   useEffect(() => {
     const silentLoad = () => {
+      // Invalidate SWR cache so next fetch goes to network
+      invalidatePrefix('orders:')
       getOrders({
         pageNum: page, pageSize,
         status:    status    || undefined,
@@ -170,7 +178,7 @@ export default function OrdersScreen() {
         endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
       }).then(r => { setRows(r.rows); setTotal(r.total) }).catch(() => {})
     }
-    const t = setInterval(silentLoad, 10_000)
+    const t = setInterval(silentLoad, 8_000)
     return () => clearInterval(t)
   }, [page, pageSize, status, orderNo, country, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
@@ -200,6 +208,9 @@ export default function OrdersScreen() {
       country:   country   || undefined,
       startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
       endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
+    }, {
+      // onFresh: silently update rows when background revalidation completes
+      onFresh: r => { setRows(r.rows); setTotal(r.total) },
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
       .finally(() => { setLoading(false); setFirstLoad(false) })
@@ -213,7 +224,7 @@ export default function OrdersScreen() {
     setPage(1)
   }
 
-  // Load pending orders for popup — clear cache first so we always get fresh data
+  // Load pending orders for popup — only unclaimed (pending) orders
   function loadPendingPopup() {
     setPendingLoading(true)
     clearClientCacheByUrl('/tuka/order/list')
@@ -230,8 +241,9 @@ export default function OrdersScreen() {
       await client.put('/tuka/order/audit', { id: orderId, status: 'processing', verifyRemark: '' })
       loadPendingPopup()
       load(page)
+      // Refresh global pending count
       client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
-        .then(r => { const n = r.data.total || 0; setPendingCount(n); prevPending.current = n })
+        .then(r => { onPendingCountChange?.(r.data.total || 0) })
     } catch (e: any) { alert(e.message) }
     finally { setClaiming(null) }
   }
@@ -269,7 +281,7 @@ export default function OrdersScreen() {
       setAuditRow(null); setAuditRemark(''); setAuditImage(''); setAuditImgFile(null); setAdjustedAmount('')
       load(page)
       client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
-        .then(r => { const n = r.data.total || 0; setPendingCount(n); prevPending.current = n })
+        .then(r => { onPendingCountChange?.(r.data.total || 0) })
     } catch (e: any) { alert(e.message) }
     finally { setSubmitting(false) }
   }
@@ -335,12 +347,12 @@ export default function OrdersScreen() {
         {/* Right: pending orders badge button → opens popup */}
         <div className="toolbar-right">
           <button
-            className={'pending-btn' + (newOrderFlash ? ' flash' : '')}
+            className="pending-btn"
             onClick={() => { loadPendingPopup(); setPendingPopup(true) }}
           >
             待受理订单
-            {pendingCount > 0 && (
-              <span className={'pending-badge' + (newOrderFlash ? ' flash' : '')}>{pendingCount}</span>
+            {globalPendingCount > 0 && (
+              <span className="pending-badge">{globalPendingCount}</span>
             )}
           </button>
         </div>
@@ -378,7 +390,7 @@ export default function OrdersScreen() {
             )}
             {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={11} className="table-empty">暂无数据</td></tr>}
             {!(loading && firstLoad) && rows.map(r => (
-              <tr key={r.id} className={r.status === 'pending' ? 'row-pending' : ''}>
+              <tr key={r.id}>
                 <td>{r.id}</td>
                 <td>{r.userId}</td>
                 <td className="mono">{r.orderNo}</td>
@@ -441,7 +453,13 @@ export default function OrdersScreen() {
             : <button key={p} className={'pg-btn' + (p === page ? ' current' : '')} onClick={() => goPage(p as number)}>{p}</button>
         )}
         <button className="pg-btn" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>›</button>
-        <span className="pg-size">10 / page</span>
+        <select
+          className="pg-size-select"
+          value={pageSize}
+          onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+        >
+          {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / page</option>)}
+        </select>
       </div>
 
       {/* ── 核销数据 modal (查看数据 button) — matches screenshot 1 ── */}
@@ -789,90 +807,59 @@ export default function OrdersScreen() {
       {/* ── 待受理订单 Popup ── */}
       {pendingPopup && (
         <div className="modal-mask" onClick={() => setPendingPopup(false)}>
-          <div className="pending-popup-large" onClick={e => e.stopPropagation()}>
+          <div className="pp-list-popup" onClick={e => e.stopPropagation()}>
             {/* Header */}
-            <div className="pp-header">
-              <div className="pp-header-left">
-                <span className="pp-title">待受理订单</span>
-                {!pendingLoading && (
-                  <span className="pp-count-badge">{pendingRows.length}</span>
-                )}
-              </div>
-              <div className="pp-header-actions">
-                <button className="pp-close" onClick={() => setPendingPopup(false)}>✕</button>
-              </div>
+            <div className="pp-list-header">
+              <span className="pp-list-title">待受理订单</span>
+              {pendingRows.length > 0 && (
+                <span className="pp-list-count">{pendingRows.length}</span>
+              )}
+              <button className="pp-list-close" onClick={() => setPendingPopup(false)}>✕</button>
             </div>
 
-            {/* Cards grid */}
-            <div className="pp-cards-wrap">
-              {/* No loading skeleton — show data immediately, update silently in background */}
+            {/* List body */}
+            <div className="pp-list-body">
               {pendingRows.length === 0 ? (
-                <div className="pp-empty-card">
-                  <div className="pp-empty-icon">—</div>
-                  <div className="pp-empty-title">暂无待受理订单</div>
-                  <div className="pp-empty-sub">所有订单已处理完毕</div>
-                </div>
+                <div className="pp-list-empty">暂无待受理订单</div>
               ) : (
-                <div className="pp-cards-grid">
-                  {pendingRows.map(r => (
-                    <div key={r.id} className="pp-order-card">
-                      {/* Card top */}
-                      <div className="pp-card-top">
-                        <div className="pp-card-cat">{r.categoryName}</div>
-                        <span className="pp-card-status">待接单</span>
-                      </div>
-
-                      {/* Main amounts */}
-                      <div className="pp-card-amounts">
-                        <div className="pp-card-face">
-                          <span className="pp-card-face-val">{currSym(r.cardCurrency)}{r.cardAmount}</span>
-                          <span className="pp-card-face-lbl">面值</span>
-                        </div>
-                        <div className="pp-card-arrow">→</div>
-                        <div className="pp-card-ngn">
-                          <span className="pp-card-ngn-val">{fmtNgn(r.ngnAmount)}</span>
-                          <span className="pp-card-ngn-lbl">结算金额</span>
-                        </div>
-                      </div>
-
-                      {/* Details row */}
-                      <div className="pp-card-details">
-                        <span className="pp-card-detail-item">
-                          <span className="pp-dl">用户</span>
-                          <span className="pp-dv">#{r.userId}</span>
-                        </span>
-                        <span className="pp-card-detail-item">
-                          <span className="pp-dl">国家</span>
-                          <span className="pp-dv">{countryLabel(r.cardCurrency)}</span>
-                        </span>
-                        <span className="pp-card-detail-item">
-                          <span className="pp-dl">类型</span>
-                          <span className="pp-dv">{r.inputType || '—'}</span>
-                        </span>
-                        {r.quantity && r.quantity > 1 && (
-                          <span className="pp-card-detail-item">
-                            <span className="pp-dl">数量</span>
-                            <span className="pp-dv">{r.quantity}</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Time + claim */}
-                      <div className="pp-card-footer">
-                        <span className="pp-card-time">{r.createTime?.slice(0, 16)}</span>
-                        {canVerify && (
-                          <button
-                            className={'pp-claim-btn' + (claiming === r.id ? ' loading' : '')}
-                            disabled={claiming === r.id}
-                            onClick={() => claimOrder(r.id)}
-                          >
-                            {claiming === r.id ? '接单中…' : '接单 →'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <table className="pp-list-table">
+                  <thead>
+                    <tr>
+                      <th>卡种</th>
+                      <th>面值</th>
+                      <th>结算金额</th>
+                      <th>数量</th>
+                      <th>类型</th>
+                      <th>国家</th>
+                      <th>时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingRows.map(r => (
+                      <tr key={r.id}>
+                        <td>{r.categoryName}</td>
+                        <td>{currSym(r.cardCurrency)}{r.cardAmount}</td>
+                        <td>{fmtNgn(r.ngnAmount)}</td>
+                        <td>{r.quantity ?? 1}</td>
+                        <td>{r.inputType || '—'}</td>
+                        <td>{countryLabel(r.cardCurrency)}</td>
+                        <td className="pp-list-time">{r.createTime?.slice(0, 16)}</td>
+                        <td>
+                          {canVerify && (
+                            <button
+                              className={'pp-list-claim' + (claiming === r.id ? ' loading' : '')}
+                              disabled={!!claiming}
+                              onClick={() => claimOrder(r.id)}
+                            >
+                              {claiming === r.id ? '接单中…' : '接单'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           </div>

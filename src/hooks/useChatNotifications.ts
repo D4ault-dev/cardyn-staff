@@ -18,7 +18,9 @@ export type NotificationEvent =
 
 // ── Single poller — replaces all individual pending-count polls ───────────────
 export function useChatNotifications(
-  onEvent: (event: NotificationEvent) => void
+  onEvent: (event: NotificationEvent) => void,
+  setPendingCount?: (n: number) => void,
+  setWdCount?: (n: number) => void,
 ) {
   const { user } = useAuth()
   const sinceRef       = useRef(Date.now())
@@ -48,6 +50,7 @@ export function useChatNotifications(
 
       if (orderRes.status === 'fulfilled') {
         const n = orderRes.value.data?.total || 0
+        setPendingCount?.(n)
         if (prevOrderRef.current >= 0 && n > prevOrderRef.current) {
           playNewOrder()
           onEvent({ type: 'order', count: n - prevOrderRef.current })
@@ -57,6 +60,7 @@ export function useChatNotifications(
 
       if (wdRes.status === 'fulfilled') {
         const n = wdRes.value.data?.total || 0
+        setWdCount?.(n)
         if (prevWdRef.current >= 0 && n > prevWdRef.current) {
           playNewWithdrawal()
           onEvent({ type: 'withdrawal', count: n - prevWdRef.current })
@@ -79,18 +83,26 @@ export function useChatNotifications(
 
   useEffect(() => {
     if (!user) return
-    // Seed initial counts after a 3s delay — let login/page data load first
+    // Seed initial counts after a 1s delay — let login/page data load first
     const seedTimer = setTimeout(() => {
       Promise.allSettled([
         client.get('/tuka/order/list',      { params: { status: 'pending', pageSize: 1 } })
-          .then(r => { prevOrderRef.current = r.data?.total || 0 }),
+          .then(r => {
+            const n = r.data?.total || 0
+            prevOrderRef.current = n
+            setPendingCount?.(n)
+          }),
         client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 1 } })
-          .then(r => { prevWdRef.current = r.data?.total || 0 }),
+          .then(r => {
+            const n = r.data?.total || 0
+            prevWdRef.current = n
+            setWdCount?.(n)
+          }),
       ])
-    }, 3000)
+    }, 1000)
 
-    // Poll every 5s for fast order notifications
-    timerRef.current = setInterval(check, 5_000)
+    // Poll every 2s for near real-time order/withdrawal/chat notifications
+    timerRef.current = setInterval(check, 2_000)
     return () => {
       clearTimeout(seedTimer)
       if (timerRef.current) clearInterval(timerRef.current)
