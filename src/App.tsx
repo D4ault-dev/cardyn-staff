@@ -6,6 +6,7 @@ import { useChatNotifications } from './hooks/useChatNotifications'
 import type { NotificationEvent } from './hooks/useChatNotifications'
 import OnlineBar from './components/OnlineBar'
 import ChatToast from './components/ChatToast'
+import UpdateBanner from './components/UpdateBanner'
 import type { ToastItem } from './components/ChatToast'
 import LoginScreen from './screens/LoginScreen'
 import ChatScreen from './screens/ChatScreen'
@@ -194,6 +195,9 @@ function Shell() {
           }
         }}
       />
+
+      {/* Auto-update banner */}
+      <UpdateBanner />
     </div>
   )
 }
