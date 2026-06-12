@@ -24,6 +24,9 @@ const CACHE_EXCLUDE = [
   '/tuka/chat/admin/dashboard-poll',
   '/tuka/staff/heartbeat',
   '/tuka/staff/online',
+  // Order/withdrawal pending counts — polled every 5s for real-time alerts
+  '/tuka/order/list',
+  '/tuka/withdrawal/list',
 ]
 
 function isExcluded(url: string): boolean {
