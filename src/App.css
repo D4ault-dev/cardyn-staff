@@ -46,11 +46,13 @@ body {
   display: flex; flex-direction: column;
   height: 100vh; overflow: hidden;
   -webkit-app-region: drag;
+  /* 32px top space for macOS traffic lights / Windows title bar */
+  padding-top: 32px;
 }
 
 .sidebar-logo {
   display: flex; align-items: center; gap: 10px;
-  padding: 0 20px; height: 56px;
+  padding: 0 20px; height: 52px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0; -webkit-app-region: no-drag;
 }

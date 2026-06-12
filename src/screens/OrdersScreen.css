@@ -195,7 +195,7 @@
   display:flex; align-items:center; justify-content:center; z-index:100;
 }
 .modal-box {
-  background:#fff; border-radius:8px; width:580px; max-height:82vh;
+  background:#fff; border-radius:8px; width:580px; max-height:90vh;
   overflow:hidden; display:flex; flex-direction:column;
   box-shadow:0 8px 32px rgba(0,0,0,.15);
 }
