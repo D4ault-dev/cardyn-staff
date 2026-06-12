@@ -57,8 +57,7 @@
     },
     "win": {
       "target": [
-        { "target": "squirrel", "arch": ["x64"] },
-        { "target": "nsis",     "arch": ["x64"] }
+        { "target": "nsis", "arch": ["x64"] }
       ]
     },
     "linux": {

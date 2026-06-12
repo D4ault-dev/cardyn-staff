@@ -107,14 +107,15 @@ export default function OrdersScreen() {
   // Two separate modals matching the screenshots
   const [verifyData,   setVerifyData]   = useState<Order | null>(null)
   const [cardData,     setCardData]     = useState<Order | null>(null)
-  const [auditRow,     setAuditRow]     = useState<Order | null>(null)
-  const [auditResult,  setAuditResult]  = useState<'paid' | 'rejected'>('paid')
-  const [auditRemark,  setAuditRemark]  = useState('')
-  const [auditImage,   setAuditImage]   = useState<string>('')
-  const [auditImgFile, setAuditImgFile] = useState<File | null>(null)
-  const [submitting,   setSubmitting]   = useState(false)
-  const [lightbox,     setLightbox]     = useState<string | null>(null)
-  const [copyMsg,      setCopyMsg]      = useState<string | null>(null)
+  const [auditRow,       setAuditRow]       = useState<Order | null>(null)
+  const [auditResult,    setAuditResult]    = useState<'paid' | 'rejected'>('paid')
+  const [auditRemark,    setAuditRemark]    = useState('')
+  const [auditImage,     setAuditImage]     = useState<string>('')
+  const [auditImgFile,   setAuditImgFile]   = useState<File | null>(null)
+  const [adjustedAmount, setAdjustedAmount] = useState<string>('')
+  const [submitting,     setSubmitting]     = useState(false)
+  const [lightbox,       setLightbox]       = useState<string | null>(null)
+  const [copyMsg,        setCopyMsg]        = useState<string | null>(null)
 
   function copyImg(url: string) {
     copyImageToClipboard(url)
@@ -148,6 +149,23 @@ export default function OrdersScreen() {
         prevPending.current = n
       }).catch(() => {})
   }, [])
+
+  // Ctrl+V paste image into audit dialog when it's open
+  useEffect(() => {
+    if (!auditRow) return
+    function handlePaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile()
+          if (file) { setAuditImgFile(file); break }
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [auditRow])
 
   const load = useCallback((p: number) => {
     setLoading(true)
@@ -199,7 +217,6 @@ export default function OrdersScreen() {
     setSubmitting(true)
     try {
       let imageUrl = auditImage
-      // Upload verify image if a file was selected
       if (auditImgFile) {
         const formData = new FormData()
         formData.append('file', auditImgFile)
@@ -208,9 +225,19 @@ export default function OrdersScreen() {
         })
         imageUrl = res.data.url || ''
       }
+      // If adjusted amount is provided, update the order amount first
+      const adj = parseFloat(adjustedAmount)
+      if (adjustedAmount.trim() && !isNaN(adj) && adj !== auditRow.ngnAmount) {
+        await client.put('/tuka/order/audit', {
+          id: auditRow.id,
+          status: auditRow.status, // keep current status, just update amount
+          verifyRemark: '',
+          newAmount: adj,
+        })
+      }
       await auditOrder(auditRow.id, auditResult, auditRemark, imageUrl)
       playSuccess()
-      setAuditRow(null); setAuditRemark(''); setAuditImage(''); setAuditImgFile(null)
+      setAuditRow(null); setAuditRemark(''); setAuditImage(''); setAuditImgFile(null); setAdjustedAmount('')
       load(page)
       client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
         .then(r => { const n = r.data.total || 0; setPendingCount(n); prevPending.current = n })
@@ -343,11 +370,11 @@ export default function OrdersScreen() {
                     {canVerify && r.status === 'pending' ? (
                       <>
                         <button className="act-btn primary"
-                          onClick={() => { setAuditRow(r); setAuditResult('paid'); setAuditRemark('') }}>
+                          onClick={() => { setAuditRow(r); setAuditResult('paid'); setAuditRemark(''); setAdjustedAmount('') }}>
                           核销完成
                         </button>
                         <button className="act-btn danger"
-                          onClick={() => { setAuditRow(r); setAuditResult('rejected'); setAuditRemark('') }}>
+                          onClick={() => { setAuditRow(r); setAuditResult('rejected'); setAuditRemark(''); setAdjustedAmount('') }}>
                           失败
                         </button>
                       </>
@@ -357,11 +384,11 @@ export default function OrdersScreen() {
                       ) ? (
                       <>
                         <button className="act-btn primary"
-                          onClick={() => { setAuditRow(r); setAuditResult('paid'); setAuditRemark('') }}>
+                          onClick={() => { setAuditRow(r); setAuditResult('paid'); setAuditRemark(''); setAdjustedAmount('') }}>
                           核销完成
                         </button>
                         <button className="act-btn danger"
-                          onClick={() => { setAuditRow(r); setAuditResult('rejected'); setAuditRemark('') }}>
+                          onClick={() => { setAuditRow(r); setAuditResult('rejected'); setAuditRemark(''); setAdjustedAmount('') }}>
                           失败
                         </button>
                       </>
@@ -585,11 +612,11 @@ export default function OrdersScreen() {
 
       {/* Audit modal */}
       {auditRow && (
-        <div className="modal-mask" onClick={() => { setAuditRow(null); setAuditImgFile(null); setAuditImage('') }}>
+        <div className="modal-mask" onClick={() => { setAuditRow(null); setAuditImgFile(null); setAuditImage(''); setAdjustedAmount('') }}>
           <div className="modal-box small" onClick={e => e.stopPropagation()}>
             <div className="modal-head">
               <span>{auditResult === 'paid' ? '核销完成' : '标记失败'}</span>
-              <button onClick={() => { setAuditRow(null); setAuditImgFile(null); setAuditImage('') }}>✕</button>
+              <button onClick={() => { setAuditRow(null); setAuditImgFile(null); setAuditImage(''); setAdjustedAmount('') }}>✕</button>
             </div>
             <div className="modal-body">
               <DR label="订单编号" value={auditRow.orderNo} />
@@ -597,6 +624,19 @@ export default function OrdersScreen() {
               <DR label="卡种"     value={auditRow.categoryName} />
               <DR label="面值"     value={`${currSym(auditRow.cardCurrency)}${auditRow.cardAmount}`} />
               <DR label="结算金额" value={fmtNgn(auditRow.ngnAmount)} />
+
+              {/* Editable settlement amount — for partial bad card adjustments */}
+              <div className="form-row" style={{ marginBottom: 8 }}>
+                <label className="form-label" style={{ color: '#f59e0b', fontWeight: 700 }}>调整金额</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  placeholder={`默认 ${fmtNgn(auditRow.ngnAmount)}，如有坏卡可修改`}
+                  value={adjustedAmount}
+                  onChange={e => setAdjustedAmount(e.target.value)}
+                  style={{ flex: 1, borderColor: adjustedAmount ? '#f59e0b' : undefined }}
+                />
+              </div>
 
               {/* Show individual codes with pass/fail for each */}
               {auditRow.cardCode && auditRow.cardCode.trim() && (
@@ -659,7 +699,7 @@ export default function OrdersScreen() {
                   ) : (
                     <div className="audit-img-placeholder">
                       <span className="audit-img-icon">[ IMG ]</span>
-                      <span>点击上传 或 使用上方粘贴按钮</span>
+                      <span>点击上传 / Ctrl+V 粘贴 / 使用粘贴按钮</span>
                     </div>
                   )}
                   <input type="file" accept="image/*" style={{ display: 'none' }}
