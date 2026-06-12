@@ -628,14 +628,21 @@ export default function OrdersScreen() {
               {/* Editable settlement amount — for partial bad card adjustments */}
               <div className="form-row" style={{ marginBottom: 8 }}>
                 <label className="form-label" style={{ color: '#f59e0b', fontWeight: 700 }}>调整金额</label>
-                <input
-                  className="form-input"
-                  type="number"
-                  placeholder={`默认 ${fmtNgn(auditRow.ngnAmount)}，如有坏卡可修改`}
-                  value={adjustedAmount}
-                  onChange={e => setAdjustedAmount(e.target.value)}
-                  style={{ flex: 1, borderColor: adjustedAmount ? '#f59e0b' : undefined }}
-                />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <input
+                    className="form-input"
+                    type="number"
+                    placeholder={`留空则使用原金额 ${fmtNgn(auditRow.ngnAmount)}`}
+                    value={adjustedAmount}
+                    onChange={e => setAdjustedAmount(e.target.value)}
+                    style={{ borderColor: adjustedAmount ? '#f59e0b' : undefined }}
+                  />
+                  {(auditRow.quantity ?? 0) > 1 && !adjustedAmount && (
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                      提示：如有坏卡，请输入实际应支付金额（例如 {auditRow.quantity} 张中 2 张有效 → 输入 {fmtNgn((auditRow.ngnAmount / (auditRow.quantity ?? 1)) * 2)}）
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Show individual codes with pass/fail for each */}

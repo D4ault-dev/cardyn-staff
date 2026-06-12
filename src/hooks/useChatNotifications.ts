@@ -89,8 +89,8 @@ export function useChatNotifications(
       ])
     }, 3000)
 
-    // Poll every 20s — was 10s, 3 requests × 3/min = 9 req/min → now 9 req/2min
-    timerRef.current = setInterval(check, 20_000)
+    // Poll every 5s for fast order notifications
+    timerRef.current = setInterval(check, 5_000)
     return () => {
       clearTimeout(seedTimer)
       if (timerRef.current) clearInterval(timerRef.current)
