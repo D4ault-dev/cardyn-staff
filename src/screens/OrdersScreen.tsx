@@ -625,9 +625,31 @@ export default function OrdersScreen() {
               <textarea className="audit-remark" placeholder="备注（如：bad card / used card）" rows={2}
                 value={auditRemark} onChange={e => setAuditRemark(e.target.value)} />
 
-              {/* Verify image upload */}
+              {/* Verify image upload + clipboard paste */}
               <div className="audit-img-section">
-                <div className="audit-img-label">核销凭证图片（可选）</div>
+                <div className="audit-img-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>凭证图片（可选）</span>
+                  <button
+                    style={{ fontSize: 11, color: '#1677ff', background: 'none', border: '1px solid #1677ff', borderRadius: 4, padding: '1px 8px', cursor: 'pointer' }}
+                    onClick={async () => {
+                      try {
+                        const items = await navigator.clipboard.read()
+                        for (const item of items) {
+                          const imgType = item.types.find(t => t.startsWith('image/'))
+                          if (imgType) {
+                            const blob = await item.getType(imgType)
+                            const file = new File([blob], 'pasted.png', { type: imgType })
+                            setAuditImgFile(file)
+                            break
+                          }
+                        }
+                      } catch {
+                        alert('请先复制图片，再点击此按钮粘贴')
+                      }
+                    }}>
+                    粘贴图片
+                  </button>
+                </div>
                 <label className="audit-img-upload">
                   {auditImgFile ? (
                     <div className="audit-img-preview-wrap">
@@ -637,7 +659,7 @@ export default function OrdersScreen() {
                   ) : (
                     <div className="audit-img-placeholder">
                       <span className="audit-img-icon">[ IMG ]</span>
-                      <span>点击上传图片</span>
+                      <span>点击上传 或 使用上方粘贴按钮</span>
                     </div>
                   )}
                   <input type="file" accept="image/*" style={{ display: 'none' }}

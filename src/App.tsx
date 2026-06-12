@@ -8,6 +8,7 @@ import OnlineBar from './components/OnlineBar'
 import ChatToast from './components/ChatToast'
 import UpdateBanner from './components/UpdateBanner'
 import type { ToastItem } from './components/ChatToast'
+import { playNewChat, playNewOrder, playNewWithdrawal } from './utils/sound'
 import LoginScreen from './screens/LoginScreen'
 import ChatScreen from './screens/ChatScreen'
 import OrdersScreen from './screens/OrdersScreen'
@@ -59,29 +60,32 @@ function Shell() {
   const handleNotification = useCallback((event: NotificationEvent) => {
     const id = `${event.type}-${Date.now()}`
     if (event.type === 'chat') {
+      playNewChat()
       event.chats.forEach(c => {
         setToasts(prev => [...prev, {
           id:        `chat-${c.id}-${Date.now()}`,
           type:      'chat',
-          title:     'New Chat Request',
-          message:   `${c.userName || `User#${c.userId}`} started a conversation${c.orderNo ? ` · ${c.orderNo}` : ''}`,
+          title:     '新聊天请求',
+          message:   `${c.userName || `User#${c.userId}`} 发起了会话${c.orderNo ? ` · ${c.orderNo}` : ''}`,
           sessionId: c.id,
         }])
       })
       setUnread(prev => prev + event.chats.length)
     } else if (event.type === 'order') {
+      playNewOrder()
       setOrderBadge(prev => prev + event.count)
       setToasts(prev => [...prev, {
         id, type: 'order',
-        title:   'New Order',
-        message: `${event.count} new order${event.count > 1 ? 's' : ''} waiting for review`,
+        title:   '新订单',
+        message: `${event.count} 个新订单等待处理`,
       }])
     } else if (event.type === 'withdrawal') {
+      playNewWithdrawal()
       setWdBadge(prev => prev + event.count)
       setToasts(prev => [...prev, {
         id, type: 'withdrawal',
-        title:   'New Withdrawal',
-        message: `${event.count} new withdrawal request${event.count > 1 ? 's' : ''}`,
+        title:   '新提现申请',
+        message: `${event.count} 个新提现请求`,
       }])
     }
   }, [])
@@ -115,7 +119,7 @@ function Shell() {
             className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
           >
             <span className="nav-icon"><IconChat /></span>
-            <span className="nav-label">Live Chat</span>
+            <span className="nav-label">客服聊天</span>
             {unread > 0 && <span className="nav-badge">{unread > 99 ? '99+' : unread}</span>}
           </NavLink>
 
@@ -125,7 +129,7 @@ function Shell() {
             onClick={() => setOrderBadge(0)}
           >
             <span className="nav-icon"><IconOrders /></span>
-            <span className="nav-label">Orders</span>
+            <span className="nav-label">订单管理</span>
             {orderBadge > 0 && <span className="nav-badge orange">{orderBadge}</span>}
           </NavLink>
 
@@ -135,7 +139,7 @@ function Shell() {
             onClick={() => setWdBadge(0)}
           >
             <span className="nav-icon"><IconWithdraw /></span>
-            <span className="nav-label">Withdrawals</span>
+            <span className="nav-label">提现管理</span>
             {wdBadge > 0 && <span className="nav-badge orange">{wdBadge}</span>}
           </NavLink>
 
@@ -144,7 +148,7 @@ function Shell() {
             className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
           >
             <span className="nav-icon"><IconUsers /></span>
-            <span className="nav-label">Users</span>
+            <span className="nav-label">用户管理</span>
           </NavLink>
         </nav>
 
@@ -159,7 +163,7 @@ function Shell() {
           </div>
           <button className="sidebar-logout" onClick={logout}>
             <IconLogout />
-            Sign out
+            退出登录
           </button>
         </div>
       </aside>

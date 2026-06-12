@@ -56,7 +56,7 @@ export default function UpdateBanner() {
   if (state === 'ready') {
     return (
       <div style={styles.banner('#16a34a')}>
-        <span>🎉 新版本 {version} 已下载完成，点击安装更新</span>
+        <span>新版本 {version} 已下载完成，点击安装更新</span>
         <button style={styles.btn('#fff', '#15803d')} onClick={handleInstall}>
           立即更新
         </button>
@@ -68,7 +68,7 @@ export default function UpdateBanner() {
   if (state === 'available') {
     return (
       <div style={styles.banner('#2563eb')}>
-        <span>⬇ 新版本下载中…</span>
+        <span>新版本下载中...</span>
       </div>
     )
   }
