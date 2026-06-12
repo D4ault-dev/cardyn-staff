@@ -225,17 +225,22 @@ export default function OrdersScreen() {
         })
         imageUrl = res.data.url || ''
       }
-      // If adjusted amount is provided, update the order amount first
-      const adj = parseFloat(adjustedAmount)
-      if (adjustedAmount.trim() && !isNaN(adj) && adj !== auditRow.ngnAmount) {
-        await client.put('/tuka/order/audit', {
-          id: auditRow.id,
-          status: auditRow.status, // keep current status, just update amount
-          verifyRemark: '',
-          newAmount: adj,
-        })
+      // If accepted cards count is provided, calculate the adjusted amount
+      const acceptedCount = parseInt(adjustedAmount)
+      const totalQty = auditRow.quantity ?? 1
+      let newAmount: number | undefined
+      if (adjustedAmount.trim() && !isNaN(acceptedCount) && acceptedCount > 0 && acceptedCount < totalQty) {
+        const perCardAmount = auditRow.ngnAmount / totalQty
+        newAmount = Math.round(perCardAmount * acceptedCount * 100) / 100
       }
-      await auditOrder(auditRow.id, auditResult, auditRemark, imageUrl)
+      // Pass newAmount directly to the audit call
+      await client.put('/tuka/order/audit', {
+        id: auditRow.id,
+        status: auditResult,
+        verifyRemark: auditRemark,
+        verifyImage: imageUrl,
+        ...(newAmount !== undefined ? { newAmount } : {}),
+      })
       playSuccess()
       setAuditRow(null); setAuditRemark(''); setAuditImage(''); setAuditImgFile(null); setAdjustedAmount('')
       load(page)
@@ -625,25 +630,35 @@ export default function OrdersScreen() {
               <DR label="面值"     value={`${currSym(auditRow.cardCurrency)}${auditRow.cardAmount}`} />
               <DR label="结算金额" value={fmtNgn(auditRow.ngnAmount)} />
 
-              {/* Editable settlement amount — for partial bad card adjustments */}
-              <div className="form-row" style={{ marginBottom: 8 }}>
-                <label className="form-label" style={{ color: '#f59e0b', fontWeight: 700 }}>调整金额</label>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <input
-                    className="form-input"
-                    type="number"
-                    placeholder={`留空则使用原金额 ${fmtNgn(auditRow.ngnAmount)}`}
-                    value={adjustedAmount}
-                    onChange={e => setAdjustedAmount(e.target.value)}
-                    style={{ borderColor: adjustedAmount ? '#f59e0b' : undefined }}
-                  />
-                  {(auditRow.quantity ?? 0) > 1 && !adjustedAmount && (
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                      提示：如有坏卡，请输入实际应支付金额（例如 {auditRow.quantity} 张中 2 张有效 → 输入 {fmtNgn((auditRow.ngnAmount / (auditRow.quantity ?? 1)) * 2)}）
+              {/* Accepted cards count — auto-calculates adjusted settlement amount */}
+              {(auditRow.quantity ?? 1) > 1 && (
+                <div className="form-row" style={{ marginBottom: 8 }}>
+                  <label className="form-label" style={{ color: '#f59e0b', fontWeight: 700 }}>接受数量</label>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        className="form-input"
+                        type="number"
+                        min={0}
+                        max={auditRow.quantity ?? 1}
+                        placeholder={`全部 ${auditRow.quantity ?? 1} 张（留空表示全部接受）`}
+                        value={adjustedAmount}
+                        onChange={e => setAdjustedAmount(e.target.value)}
+                        style={{ flex: 1, borderColor: adjustedAmount ? '#f59e0b' : undefined }}
+                      />
+                      <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>
+                        / {auditRow.quantity ?? 1} 张
+                      </span>
                     </div>
-                  )}
+                    {adjustedAmount && !isNaN(Number(adjustedAmount)) && (
+                      <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 4 }}>
+                        结算金额：{fmtNgn((auditRow.ngnAmount / (auditRow.quantity ?? 1)) * Number(adjustedAmount))}
+                        （单张 {fmtNgn(auditRow.ngnAmount / (auditRow.quantity ?? 1))} × {adjustedAmount} 张）
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Show individual codes with pass/fail for each */}
               {auditRow.cardCode && auditRow.cardCode.trim() && (
