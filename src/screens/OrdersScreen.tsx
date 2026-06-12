@@ -150,6 +150,30 @@ export default function OrdersScreen() {
       }).catch(() => {})
   }, [])
 
+  // Auto-refresh pending popup every 5s while it's open
+  useEffect(() => {
+    if (!pendingPopup) return
+    loadPendingPopup()
+    const t = setInterval(loadPendingPopup, 5_000)
+    return () => clearInterval(t)
+  }, [pendingPopup]) // eslint-disable-line
+
+  // Silent background auto-refresh of order table every 10s — no loading spinner
+  useEffect(() => {
+    const silentLoad = () => {
+      getOrders({
+        pageNum: page, pageSize,
+        status:    status    || undefined,
+        orderNo:   orderNo   || undefined,
+        country:   country   || undefined,
+        startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
+        endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
+      }).then(r => { setRows(r.rows); setTotal(r.total) }).catch(() => {})
+    }
+    const t = setInterval(silentLoad, 10_000)
+    return () => clearInterval(t)
+  }, [page, pageSize, status, orderNo, country, startDate, endDate, startTime, endTime]) // eslint-disable-line
+
   // Ctrl+V paste image into audit dialog when it's open
   useEffect(() => {
     if (!auditRow) return
@@ -304,8 +328,7 @@ export default function OrdersScreen() {
             onClear={() => { setStartDate(''); setEndDate(''); setStartTime(''); setEndTime('') }}
           />
 
-          {/* Refresh + Reset */}
-          <button className="icon-btn-sm" onClick={() => load(page)} title="刷新">↻</button>
+          {/* Reset only — refresh happens automatically every 5s */}
           <button className="icon-btn-sm" onClick={reset} title="重置">✕</button>
         </div>
 
@@ -660,7 +683,7 @@ export default function OrdersScreen() {
                 </div>
               )}
 
-              {/* Show individual codes with pass/fail for each */}
+              {/* Show card codes if available */}
               {auditRow.cardCode && auditRow.cardCode.trim() && (
                 <div className="audit-codes-section">
                   <div className="audit-codes-title">卡片代码 ({auditRow.cardCode.split('\n').filter((c: string) => c.trim()).length} 张)</div>
@@ -672,6 +695,31 @@ export default function OrdersScreen() {
                         onClick={() => navigator.clipboard.writeText(code.trim())}>复制</button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Show card images if this is an image-type order */}
+              {auditRow.cardImage && auditRow.cardImage.trim() && (
+                <div className="audit-codes-section">
+                  <div className="audit-codes-title">卡片图片 ({auditRow.cardImage.split(',').filter((u: string) => u.trim()).length} 张)</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                    {auditRow.cardImage.split(',').filter((u: string) => u.trim()).map((url: string, i: number) => (
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <Img
+                          src={resolveUrl(url.trim())}
+                          className="card-thumb"
+                          alt={`卡片图片 ${i + 1}`}
+                          onClick={() => setLightbox(resolveUrl(url.trim()))}
+                          style={{ width: 120, height: 120, cursor: 'pointer', borderRadius: 6, border: '1px solid #e8e8e8' }}
+                        />
+                        <button
+                          onClick={() => copyImg(resolveUrl(url.trim()))}
+                          style={{ fontSize: 11, color: '#1677ff', background: 'none', border: '1px solid #1677ff', borderRadius: 4, padding: '1px 8px', cursor: 'pointer' }}>
+                          复制图片
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -751,44 +799,20 @@ export default function OrdersScreen() {
                 )}
               </div>
               <div className="pp-header-actions">
-                <button
-                  className="pp-refresh-btn"
-                  onClick={loadPendingPopup}
-                  disabled={pendingLoading}
-                  title="刷新"
-                >
-                  {pendingLoading ? '加载中…' : '↻ 刷新'}
-                </button>
                 <button className="pp-close" onClick={() => setPendingPopup(false)}>✕</button>
               </div>
             </div>
 
             {/* Cards grid */}
             <div className="pp-cards-wrap">
-              {/* Loading skeleton */}
-              {pendingLoading && (
-                <div className="pp-cards-grid">
-                  {[1,2,3,4,5,6].map(k => (
-                    <div key={k} className="pp-order-card pp-skeleton-card">
-                      <div className="pp-sk-line wide" />
-                      <div className="pp-sk-amounts">
-                        <div className="pp-sk-line medium" />
-                        <div className="pp-sk-line medium" />
-                      </div>
-                      <div className="pp-sk-line narrow" />
-                      <div className="pp-sk-line narrow" />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {!pendingLoading && pendingRows.length === 0 ? (
+              {/* No loading skeleton — show data immediately, update silently in background */}
+              {pendingRows.length === 0 ? (
                 <div className="pp-empty-card">
                   <div className="pp-empty-icon">—</div>
                   <div className="pp-empty-title">暂无待受理订单</div>
                   <div className="pp-empty-sub">所有订单已处理完毕</div>
                 </div>
-              ) : !pendingLoading && (
+              ) : (
                 <div className="pp-cards-grid">
                   {pendingRows.map(r => (
                     <div key={r.id} className="pp-order-card">
