@@ -1,46 +1,34 @@
-const { app, BrowserWindow, ipcMain, shell, autoUpdater, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const path = require('path')
 
 const isDev = !app.isPackaged
 
 // ── Auto-updater setup (production only) ──────────────────────────────────────
-const GITHUB_OWNER = 'D4ault-dev'
-const GITHUB_REPO  = 'cardyn-staff'
-
 function setupAutoUpdater(win) {
   if (isDev) return
 
-  const platform = process.platform === 'darwin' ? 'darwin' : 'win32'
-  const arch     = process.arch === 'arm64'       ? 'arm64'  : 'x64'
-  const version  = app.getVersion()
+  // Point to your server where GitHub Actions uploads the latest.yml + installers
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: 'https://cardyn.net/downloads/',
+  })
 
-  // Squirrel-based update server URL (GitHub Releases feed)
-  // electron-builder publishes a RELEASES file that autoUpdater reads
-  const feedUrl = `https://update.electronjs.org/${GITHUB_OWNER}/${GITHUB_REPO}/${platform}-${arch}/${version}`
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = false
 
-  try {
-    autoUpdater.setFeedURL({ url: feedUrl })
-  } catch (e) {
-    console.log('[Updater] setFeedURL failed:', e.message)
-    return
-  }
-
-  // Check on startup (delay 10s so app loads first)
-  setTimeout(() => {
-    autoUpdater.checkForUpdates()
-  }, 10_000)
+  // Check on startup after 10s
+  setTimeout(() => autoUpdater.checkForUpdates(), 10_000)
 
   // Check every 4 hours
-  setInterval(() => {
-    autoUpdater.checkForUpdates()
-  }, 4 * 60 * 60 * 1000)
+  setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000)
 
   autoUpdater.on('update-available', () => {
     win.webContents.send('update-available')
   })
 
-  autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
-    win.webContents.send('update-downloaded', releaseName)
+  autoUpdater.on('update-downloaded', (info) => {
+    win.webContents.send('update-downloaded', info.version)
   })
 
   autoUpdater.on('error', (err) => {
