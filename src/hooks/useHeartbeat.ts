@@ -9,7 +9,7 @@ export function useHeartbeat() {
   useEffect(() => {
     if (!user) return
     sendHeartbeat() // immediate on login
-    const t = setInterval(sendHeartbeat, 45_000)
+    const t = setInterval(sendHeartbeat, 30_000)  // every 30s — appears online within 90s window
     return () => clearInterval(t)
   }, [user])
 }

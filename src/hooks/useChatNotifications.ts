@@ -101,8 +101,8 @@ export function useChatNotifications(
       ])
     }, 1000)
 
-    // Poll every 2s for near real-time order/withdrawal/chat notifications
-    timerRef.current = setInterval(check, 2_000)
+    // Poll every 4s — fast enough for near real-time, slow enough to not cancel in-flight requests
+    timerRef.current = setInterval(check, 4_000)
     return () => {
       clearTimeout(seedTimer)
       if (timerRef.current) clearInterval(timerRef.current)
