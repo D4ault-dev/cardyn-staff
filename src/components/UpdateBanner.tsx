@@ -38,16 +38,15 @@ export default function UpdateBanner() {
 
   if (state === 'ready') return (
     <div style={banner('#16a34a')}>
-      <span>新版本 {newVer} 已准备好，点击安装</span>
-      <button style={btn} onClick={() => window.electron?.installUpdate?.()}>立即安装</button>
+      <span>🎉 新版本 {newVer} 已下载完成</span>
+      <button style={btn} onClick={() => window.electron?.installUpdate?.()}>立即重启安装</button>
+      <button style={{ ...btn, background: 'transparent', border: 'none', opacity: 0.7 }}
+        onClick={() => setState('idle')}>稍后</button>
     </div>
   )
 
-  if (state === 'available') return (
-    <div style={banner('#2563eb')}>
-      <span>正在下载新版本…</span>
-    </div>
-  )
+  // While downloading — show nothing (silent background download)
+  if (state === 'available') return null
 
   // Idle — show version number + check button
   return (

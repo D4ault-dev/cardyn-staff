@@ -15,7 +15,7 @@ function setupAutoUpdater(win) {
   })
 
   autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.autoInstallOnAppQuit = true  // install when app quits naturally
 
   // Check on startup after 10s
   setTimeout(() => autoUpdater.checkForUpdates(), 10_000)
