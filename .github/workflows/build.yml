@@ -130,10 +130,11 @@ jobs:
             VERSION="${{ steps.version.outputs.version }}"
             RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
 
-            # Windows latest.yml
-            EXE=$(ls "Cardyn Staff Setup"*.exe 2>/dev/null | head -1)
-            if [ -z "$EXE" ]; then EXE=$(ls *.exe 2>/dev/null | head -1); fi
-            if [ -n "$EXE" ]; then
+            # Windows latest.yml — use exact version filename to avoid picking old files
+            EXE="Cardyn Staff Setup ${VERSION}.exe"
+            if [ ! -f "$EXE" ]; then EXE=$(ls "Cardyn Staff Setup"*.exe 2>/dev/null | sort -V | tail -1); fi
+            if [ -z "$EXE" ]; then EXE=$(ls *.exe 2>/dev/null | sort -V | tail -1); fi
+            if [ -n "$EXE" ] && [ -f "$EXE" ]; then
               SIZE=$(stat -c%s "$EXE")
               SHA512=$(sha512sum "$EXE" | awk '{print $1}' | xxd -r -p | base64 -w0)
               EXE_ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$EXE'))")
