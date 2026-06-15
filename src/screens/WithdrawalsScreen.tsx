@@ -71,6 +71,7 @@ export default function WithdrawalsScreen({
   const [rejectModal,setRejectModal]= useState<Withdrawal | null>(null)
   const [remark,     setRemark]     = useState('')
   const [receiptFile,setReceiptFile]= useState<File | null>(null)
+  const [rejectFile, setRejectFile] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [lightbox,   setLightbox]   = useState<string | null>(null)
   const [configFee,  setConfigFee]  = useState(50)  // fetched from system config
@@ -91,6 +92,23 @@ export default function WithdrawalsScreen({
     window.addEventListener('paste', handlePaste)
     return () => window.removeEventListener('paste', handlePaste)
   }, [payModal])
+
+  // Ctrl+V paste image when reject modal is open
+  useEffect(() => {
+    if (!rejectModal) return
+    function handlePaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile()
+          if (file) { setRejectFile(file); break }
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [rejectModal])
 
   // Fetch withdrawal fee from system config on mount
   useEffect(() => {
@@ -162,8 +180,17 @@ export default function WithdrawalsScreen({
     if (!rejectModal) return
     setSubmitting(true)
     try {
+      let rejectImageUrl = ''
+      if (rejectFile) {
+        const fd = new FormData(); fd.append('file', rejectFile)
+        const res = await client.post('/common/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        rejectImageUrl = res.data.url || ''
+      }
       await rejectWithdrawal(rejectModal.id, remark)
-      setRejectModal(null); setRemark('')
+      if (rejectImageUrl) {
+        await client.put('/tuka/withdrawal/audit', { id: rejectModal.id, status: 'rejected', remark, receiptImage: rejectImageUrl })
+      }
+      setRejectModal(null); setRemark(''); setRejectFile(null)
       load(page)
     } catch (e: any) { alert(e.message) }
     finally { setSubmitting(false) }
@@ -388,14 +415,33 @@ export default function WithdrawalsScreen({
 
       {/* Reject modal */}
       {rejectModal && isPayer && (
-        <div className="modal-mask" onClick={() => setRejectModal(null)}>
+        <div className="modal-mask" onClick={() => { setRejectModal(null); setRejectFile(null) }}>
           <div className="modal-box small" onClick={e => e.stopPropagation()}>
-            <div className="modal-head"><span>拒绝提现</span><button onClick={() => setRejectModal(null)}>✕</button></div>
+            <div className="modal-head"><span>拒绝提现</span><button onClick={() => { setRejectModal(null); setRejectFile(null) }}>✕</button></div>
             <div className="modal-body">
               <div className="form-row"><label className="form-label">用户：</label><input className="form-input" readOnly value={String(rejectModal.username || rejectModal.userId)} /></div>
               <div className="form-row"><label className="form-label">金额：</label><span className="amount-red" style={{ fontSize: 15, fontWeight: 700 }}>{fmtNgn(rejectModal.amount)}</span></div>
               <textarea className="audit-remark" placeholder="拒绝原因（必填）" rows={3}
                 value={remark} onChange={e => setRemark(e.target.value)} />
+              {/* Reject evidence image */}
+              <div className="form-row align-top" style={{ marginTop: 10 }}>
+                <label className="form-label">凭证图片：</label>
+                <label className="receipt-upload">
+                  {rejectFile ? (
+                    <div className="receipt-preview-wrap">
+                      <img src={URL.createObjectURL(rejectFile)} className="receipt-preview" alt="" />
+                      <button className="audit-img-remove" onClick={e => { e.preventDefault(); setRejectFile(null) }}>✕</button>
+                    </div>
+                  ) : (
+                    <div className="audit-img-placeholder">
+                      <span className="audit-img-icon">[ IMG ]</span>
+                      <span>点击上传 或 Ctrl+V 粘贴</span>
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) setRejectFile(f); e.target.value = '' }} />
+                </label>
+              </div>
               <button className="audit-submit danger" onClick={submitReject} disabled={submitting || !remark.trim()}>
                 {submitting ? '提交中…' : '确认拒绝'}
               </button>
