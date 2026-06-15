@@ -61,6 +61,7 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
   const [showProfile,  setShowProfile]  = useState(false)
   const [lightbox,     setLightbox]     = useState<string | null>(null)
   const [copyMsg,      setCopyMsg]      = useState<string | null>(null)
+  const [pastedImage,  setPastedImage]  = useState<File | null>(null)  // image pasted via Ctrl+V
 
   function copyImg(url: string) {
     copyImageToClipboard(url)
@@ -79,6 +80,7 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
   const pollRef   = useRef<ReturnType<typeof setInterval> | null>(null)
   const wsRef     = useRef<ChatWebSocket | null>(null)
   const listRef   = useRef<HTMLDivElement>(null)
+  const canReplyRef = useRef(false)  // used inside paste handler closure
   const [wsConnected, setWsConnected] = useState(false)
 
   // ── WebSocket — connect once on mount, reconnects automatically ───────────
@@ -125,6 +127,23 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
 
   const scrollBottom = useCallback(() => {
     setTimeout(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight }, 60)
+  }, [])
+
+  // ── Ctrl+V paste image into chat ─────────────────────────────────────────
+  useEffect(() => {
+    function handlePaste(e: ClipboardEvent) {
+      if (!canReplyRef.current) return
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile()
+          if (file) { setPastedImage(file); break }
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
   }, [])
 
   const loadSessions = useCallback(() => {
@@ -310,6 +329,26 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
   const isAssigned  = active?.agentId === myUserId
   const canReply    = active?.status === 'claimed' && isAssigned && canHandleChat(user?.roleType || '')
   const canClaim    = active?.status === 'open' && canHandleChat(user?.roleType || '')
+
+  // Keep ref in sync for use inside paste event listener
+  canReplyRef.current = canReply
+
+  async function sendPastedImage(file: File) {
+    if (!active || !canReply) return
+    const formData = new FormData()
+    formData.append('sessionId', String(active.id))
+    formData.append('file', file)
+    try {
+      const res = await client.post('/tuka/chat/admin/replyImage', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      const msg = res.data.data as ChatMessage
+      setMessages(prev => [...prev, msg])
+      lastIdRef.current = msg.id
+      scrollBottom()
+    } catch (e: any) { alert(e.message) }
+    setPastedImage(null)
+  }
 
   // Smart timestamp: show time only for today, date+time for older messages
   function formatMsgTime(t: string | undefined) {
@@ -503,7 +542,16 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
           {/* Input bar */}
           {canReply ? (
             <div className="chat-input-bar">
-              <textarea className="chat-input" placeholder="输入消息"
+              {/* Pasted image preview */}
+              {pastedImage && (
+                <div className="paste-preview-bar">
+                  <img src={URL.createObjectURL(pastedImage)} className="paste-thumb" alt="粘贴图片" />
+                  <span className="paste-filename">{pastedImage.name || '粘贴的图片'}</span>
+                  <button className="paste-send-btn" onClick={() => sendPastedImage(pastedImage)}>发送图片</button>
+                  <button className="paste-cancel-btn" onClick={() => setPastedImage(null)}>✕</button>
+                </div>
+              )}
+              <textarea className="chat-input" placeholder="输入消息，Ctrl+V 粘贴图片"
                 value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
                 rows={2} />

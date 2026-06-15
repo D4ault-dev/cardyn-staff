@@ -75,6 +75,23 @@ export default function WithdrawalsScreen({
   const [lightbox,   setLightbox]   = useState<string | null>(null)
   const [configFee,  setConfigFee]  = useState(50)  // fetched from system config
 
+  // Ctrl+V paste receipt image when pay modal is open
+  useEffect(() => {
+    if (!payModal) return
+    function handlePaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile()
+          if (file) { setReceiptFile(file); break }
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [payModal])
+
   // Fetch withdrawal fee from system config on mount
   useEffect(() => {
     getWithdrawalFee().then(setConfigFee).catch(() => {})
@@ -351,7 +368,7 @@ export default function WithdrawalsScreen({
                   ) : (
                     <div className="audit-img-placeholder">
                       <span className="audit-img-icon">[ RCP ]</span>
-                      <span>上传付款收据</span>
+                      <span>点击上传 或 Ctrl+V 粘贴</span>
                     </div>
                   )}
                   <input type="file" accept="image/*" style={{ display: 'none' }}
