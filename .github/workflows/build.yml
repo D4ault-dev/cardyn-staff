@@ -6,52 +6,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-mac-arm:
-    runs-on: macos-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-      - name: Build (macOS Apple Silicon)
-        run: npm run build && npx electron-builder --mac --arm64 --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-      - name: Upload mac-arm artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cardyn-staff-mac-arm64
-          path: dist-electron/*.dmg
-          if-no-files-found: warn
-
-  build-mac-intel:
-    runs-on: macos-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-      - name: Build (macOS Intel)
-        run: npm run build && npx electron-builder --mac --x64 --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-      - name: Upload mac-intel artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cardyn-staff-mac-x64
-          path: dist-electron/*.dmg
-          if-no-files-found: warn
-
   build-windows:
     runs-on: windows-latest
     permissions:
@@ -68,15 +22,53 @@ jobs:
         run: npm run electron:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload Windows installer to server
+        uses: appleboy/scp-action@v0.1.7
         with:
-          name: cardyn-staff-windows
-          path: dist-electron/*.exe
-          if-no-files-found: warn
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "dist-electron/*.exe"
+          target: "/www/wwwroot/cardyn.net/downloads/"
+          strip_components: 1
+      - name: Generate latest.yml on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /www/wwwroot/cardyn.net/downloads
+            VERSION=$(node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('/tmp/pkg.json')); console.log(p.version);" 2>/dev/null || echo "1.0.0")
+            # Get version from the exe filename instead
+            EXE=$(ls "Cardyn Staff Setup"*.exe 2>/dev/null | sort -V | tail -1)
+            if [ -z "$EXE" ]; then EXE=$(ls *.exe 2>/dev/null | sort -V | tail -1); fi
+            if [ -n "$EXE" ] && [ -f "$EXE" ]; then
+              VERSION=$(echo "$EXE" | grep -oP '\d+\.\d+\.\d+' | head -1)
+              RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+              SIZE=$(stat -c%s "$EXE")
+              SHA512=$(sha512sum "$EXE" | awk '{print $1}' | xxd -r -p | base64 -w0)
+              EXE_ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$EXE'))")
+              cat > latest.yml << YMLEOF
+            version: $VERSION
+            files:
+              - url: $EXE_ENCODED
+                sha512: $SHA512
+                size: $SIZE
+            path: $EXE_ENCODED
+            sha512: $SHA512
+            releaseDate: '$RELEASE_DATE'
+            YMLEOF
+              echo "Generated latest.yml: version=$VERSION file=$EXE"
+              cat latest.yml
+            else
+              echo "ERROR: No .exe file found"
+              ls -la
+              exit 1
+            fi
 
   release:
-    needs: [build-mac-arm, build-mac-intel, build-windows]
+    needs: [build-windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     permissions:
@@ -91,88 +83,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION-build.${{ github.run_number }}" >> $GITHUB_OUTPUT
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release/
-          merge-multiple: true
-
-      - name: Rename artifacts clearly
-        run: |
-          cd release
-          for f in *.dmg; do
-            if [[ "$f" == *arm64* ]]; then
-              mv "$f" "Cardyn-Staff-mac-AppleSilicon.dmg" 2>/dev/null || true
-            elif [[ "$f" == *x64* ]] || [[ "$f" == *64* ]]; then
-              mv "$f" "Cardyn-Staff-mac-Intel.dmg" 2>/dev/null || true
-            fi
-          done
-          ls -la
-
-      - name: Upload installers to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "release/*"
-          target: "/www/wwwroot/cardyn.net/downloads/"
-          strip_components: 1
-
-      - name: Generate latest.yml on server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd /www/wwwroot/cardyn.net/downloads
-            VERSION="${{ steps.version.outputs.version }}"
-            RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-
-            # Windows latest.yml — use exact version filename to avoid picking old files
-            EXE="Cardyn Staff Setup ${VERSION}.exe"
-            if [ ! -f "$EXE" ]; then EXE=$(ls "Cardyn Staff Setup"*.exe 2>/dev/null | sort -V | tail -1); fi
-            if [ -z "$EXE" ]; then EXE=$(ls *.exe 2>/dev/null | sort -V | tail -1); fi
-            if [ -n "$EXE" ] && [ -f "$EXE" ]; then
-              SIZE=$(stat -c%s "$EXE")
-              SHA512=$(sha512sum "$EXE" | awk '{print $1}' | xxd -r -p | base64 -w0)
-              EXE_ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$EXE'))")
-              cat > latest.yml << YMLEOF
-            version: $VERSION
-            files:
-              - url: $EXE_ENCODED
-                sha512: $SHA512
-                size: $SIZE
-            path: $EXE_ENCODED
-            sha512: $SHA512
-            releaseDate: '$RELEASE_DATE'
-            YMLEOF
-              echo "Generated latest.yml for Windows: $EXE"
-            fi
-
-            # macOS latest-mac.yml (Apple Silicon)
-            DMG=$(ls Cardyn-Staff-mac-AppleSilicon.dmg 2>/dev/null | head -1)
-            if [ -n "$DMG" ]; then
-              SIZE=$(stat -c%s "$DMG")
-              SHA512=$(sha512sum "$DMG" | awk '{print $1}' | xxd -r -p | base64 -w0)
-              cat > latest-mac.yml << YMLEOF
-            version: $VERSION
-            files:
-              - url: $DMG
-                sha512: $SHA512
-                size: $SIZE
-                blockMapSize: 0
-            path: $DMG
-            sha512: $SHA512
-            releaseDate: '$RELEASE_DATE'
-            YMLEOF
-              echo "Generated latest-mac.yml for macOS: $DMG"
-            fi
-
-            echo "=== Downloads folder ==="
-            ls -lh
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -184,14 +94,11 @@ jobs:
             ### 下载 / Downloads
             | 平台 | 直链 | 说明 |
             |------|------|------|
-            | 🍎 Mac (Apple Silicon M1/M2/M3) | [下载 .dmg](https://cardyn.net/downloads/Cardyn-Staff-mac-AppleSilicon.dmg) | 新款Mac |
-            | 🍎 Mac (Intel) | [下载 .dmg](https://cardyn.net/downloads/Cardyn-Staff-mac-Intel.dmg) | 老款Mac |
             | 🪟 Windows | [下载 .exe](https://cardyn.net/downloads/Cardyn%20Staff%20Setup%20${{ steps.version.outputs.version }}.exe) | Windows 10/11 |
 
             > 已安装的用户会在4小时内自动收到更新提示，无需重新下载。
 
             **Build:** ${{ github.run_number }} | **Commit:** ${{ github.sha }}
-          files: release/*
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
