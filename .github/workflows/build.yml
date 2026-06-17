@@ -22,15 +22,46 @@ jobs:
         run: npm run electron:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload Windows installer to server
+      # Upload just the .exe temporarily so the linux release job can SCP it
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist-electron/*.exe
+          retention-days: 1   # auto-deleted after 1 day — minimal storage impact
+
+  release:
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION-build.${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: release/
+
+      - name: Upload installer to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "dist-electron/*.exe"
+          source: "release/*.exe"
           target: "/www/wwwroot/cardyn.net/downloads/"
           strip_components: 1
+
       - name: Generate latest.yml on server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -39,8 +70,6 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /www/wwwroot/cardyn.net/downloads
-            VERSION=$(node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('/tmp/pkg.json')); console.log(p.version);" 2>/dev/null || echo "1.0.0")
-            # Get version from the exe filename instead
             EXE=$(ls "Cardyn Staff Setup"*.exe 2>/dev/null | sort -V | tail -1)
             if [ -z "$EXE" ]; then EXE=$(ls *.exe 2>/dev/null | sort -V | tail -1); fi
             if [ -n "$EXE" ] && [ -f "$EXE" ]; then
@@ -62,26 +91,16 @@ jobs:
               echo "Generated latest.yml: version=$VERSION file=$EXE"
               cat latest.yml
             else
-              echo "ERROR: No .exe file found"
+              echo "ERROR: No .exe file found in downloads folder"
               ls -la
               exit 1
             fi
 
-  release:
-    needs: [build-windows]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Get version
-        id: version
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION-build.${{ github.run_number }}" >> $GITHUB_OUTPUT
+      - name: Delete artifact after upload (free up storage)
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: windows-installer
+        continue-on-error: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
