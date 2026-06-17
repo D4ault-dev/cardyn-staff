@@ -110,6 +110,7 @@ export default function OrdersScreen({
   const [country,      setCountry]      = useState('')
   const [status,       setStatus]       = useState('')  // default all
   const [orderNo,      setOrderNo]      = useState('')
+  const [userSearch,   setUserSearch]   = useState('')  // NEW: UID / phone / email / name
   const [startDate,    setStartDate]    = useState('')  // date only: yyyy-MM-dd
   const [endDate,      setEndDate]      = useState('')
   const [startTime,    setStartTime]    = useState('')  // HH:mm
@@ -174,16 +175,17 @@ export default function OrdersScreen({
       invalidatePrefix('orders:')
       getOrders({
         pageNum: page, pageSize,
-        status:    status    || undefined,
-        orderNo:   orderNo   || undefined,
-        country:   country   || undefined,
+        status:      status      || undefined,
+        orderNo:     orderNo     || undefined,
+        userSearch:  userSearch  || undefined,
+        country:     country     || undefined,
         startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
         endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
       }).then(r => { setRows(r.rows); setTotal(r.total) }).catch(() => {})
     }
     const t = setInterval(silentLoad, 8_000)
     return () => clearInterval(t)
-  }, [page, pageSize, status, orderNo, country, startDate, endDate, startTime, endTime]) // eslint-disable-line
+  }, [page, pageSize, status, orderNo, userSearch, country, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   // Ctrl+V paste image into audit dialog when it's open
   useEffect(() => {
@@ -206,9 +208,10 @@ export default function OrdersScreen({
     setLoading(true)
     getOrders({
       pageNum: p, pageSize,
-      status:    status    || undefined,
-      orderNo:   orderNo   || undefined,
-      country:   country   || undefined,
+      status:      status      || undefined,
+      orderNo:     orderNo     || undefined,
+      userSearch:  userSearch  || undefined,
+      country:     country     || undefined,
       startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
       endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
     }, {
@@ -217,12 +220,12 @@ export default function OrdersScreen({
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
       .finally(() => { setLoading(false); setFirstLoad(false) })
-  }, [pageSize, status, orderNo, country, startDate, endDate, startTime, endTime])
+  }, [pageSize, status, orderNo, userSearch, country, startDate, endDate, startTime, endTime])
 
-  useEffect(() => { load(1); setPage(1) }, [status, country, orderNo, startDate, endDate, startTime, endTime]) // eslint-disable-line
+  useEffect(() => { load(1); setPage(1) }, [status, country, orderNo, userSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   function reset() {
-    setStatus(''); setCountry(''); setOrderNo('')
+    setStatus(''); setCountry(''); setOrderNo(''); setUserSearch('')
     setStartDate(''); setEndDate(''); setStartTime(''); setEndTime('')
     setPage(1)
   }
@@ -335,6 +338,11 @@ export default function OrdersScreen({
           {/* Order no */}
           <input className="filter-input-sm" placeholder="订单编号" value={orderNo}
             onChange={e => setOrderNo(e.target.value)} />
+
+          {/* User search */}
+          <input className="filter-input-sm" placeholder="UID/手机/邮箱/姓名" value={userSearch}
+            onChange={e => setUserSearch(e.target.value)}
+            style={{ width: 160 }} />
 
           {/* Date range picker */}
           <DateRangePicker

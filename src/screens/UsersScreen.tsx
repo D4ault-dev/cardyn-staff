@@ -23,7 +23,7 @@ export default function UsersScreen() {
   const pageSize = 10
   const [loading, setLoading] = useState(false)
   const [firstLoad, setFirstLoad] = useState(true)
-  const [search,  setSearch]  = useState('')
+  const [search,  setSearch]  = useState('')  // UID / phone / email / name
   const [detail,  setDetail]  = useState<AppUser | null>(null)
   const [startDate, setStartDate] = useState('')
   const [endDate,   setEndDate]   = useState('')
@@ -35,7 +35,7 @@ export default function UsersScreen() {
     setLoading(true)
     const params = {
       pageNum: p, pageSize,
-      phone:     search    || undefined,
+      userSearch: search    || undefined,
       startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
       endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
     }
@@ -82,7 +82,7 @@ export default function UsersScreen() {
     <div className="orders-root">
       <div className="orders-toolbar">
         <div className="toolbar-left">
-          <input className="filter-input-sm" placeholder="手机号搜索" value={search}
+          <input className="filter-input-sm" placeholder="UID/手机/邮箱/姓名" value={search}
             onChange={e => setSearch(e.target.value)} style={{ width: 180 }} />
           <DateRangePicker
             startDate={startDate} endDate={endDate}
