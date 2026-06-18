@@ -59,10 +59,10 @@ jobs:
             "-o", "UserKnownHostsFile=/dev/null",
             "-i", $keyPath,
             "$($env:SERVER_USER)@$($env:SERVER_HOST)",
-            "mkdir -p /www/wwwroot/cardyn.net/downloads"
+            "sudo mkdir -p /www/wwwroot/cardyn.net/downloads && sudo chmod 755 /www/wwwroot/cardyn.net/downloads && sudo chown $($env:SERVER_USER):$($env:SERVER_USER) /www/wwwroot/cardyn.net/downloads"
           )
           & ssh @sshArgs
-          if ($LASTEXITCODE -ne 0) { Write-Warning "mkdir failed but continuing..." }
+          if ($LASTEXITCODE -ne 0) { Write-Warning "mkdir/chmod failed but continuing..." }
 
           # SCP the exe to server
           $scpArgs = @(
