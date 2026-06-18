@@ -53,6 +53,17 @@ jobs:
           $content = [System.IO.File]::ReadAllText($keyPath) -replace "`r`n", "`n" -replace "`r", "`n"
           [System.IO.File]::WriteAllText($keyPath, $content)
 
+          # Ensure downloads directory exists on server before SCP
+          $sshArgs = @(
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-i", $keyPath,
+            "$($env:SERVER_USER)@$($env:SERVER_HOST)",
+            "mkdir -p /www/wwwroot/cardyn.net/downloads"
+          )
+          & ssh @sshArgs
+          if ($LASTEXITCODE -ne 0) { Write-Warning "mkdir failed but continuing..." }
+
           # SCP the exe to server
           $scpArgs = @(
             "-o", "StrictHostKeyChecking=no",
