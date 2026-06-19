@@ -542,11 +542,14 @@ export default function OrdersScreen({
                     if (isNaN(amt) || amt <= 0) { alert('请输入有效金额'); return }
                     setSavingNewAmount(true)
                     try {
+                      // Send status as current status — backend detects already-paid
+                      // and only adjusts the delta, never double-credits
                       await client.put('/tuka/order/audit', {
                         id: verifyData.id,
                         status: verifyData.status,
                         verifyRemark: verifyData.verifyRemark || '',
                         newAmount: amt,
+                        amountUpdateOnly: true,  // hint to backend: only update amount, no re-pay
                       })
                       setVerifyData((prev: any) => prev ? { ...prev, newAmount: amt } : prev)
                       load(page)
