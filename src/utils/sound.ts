@@ -23,7 +23,18 @@ function tone(freq: number, duration: number, volume = 0.4, type: OscillatorType
   osc.stop(c.currentTime + duration)
 }
 
-// Pre-load the bell audio so it plays instantly
+// Pre-load the new order sound (real MP3 file)
+let _orderAudio: HTMLAudioElement | null = null
+function getOrderSound(): HTMLAudioElement {
+  if (!_orderAudio) {
+    _orderAudio = new Audio('/new-order.mp3')
+    _orderAudio.volume = 0.9
+    _orderAudio.load()
+  }
+  return _orderAudio
+}
+
+// Pre-load the bell audio so it plays instantly (fallback)
 let _bellAudio: HTMLAudioElement | null = null
 function getBell(): HTMLAudioElement {
   if (!_bellAudio) {
@@ -42,21 +53,31 @@ export function playNewChat() {
   setTimeout(() => tone(1100, 0.25, 0.5, 'square'), 560)
 }
 
-// 📦 New order — restaurant bell sound
+// New order — plays the real MP3 sound file
 export function playNewOrder() {
   try {
-    const bell = getBell()
-    bell.currentTime = 0
-    bell.play().catch(() => {
-      // Fallback to synth if autoplay blocked
-      tone(660, 0.12, 0.5, 'sine')
-      setTimeout(() => tone(880, 0.12, 0.5, 'sine'), 150)
-      setTimeout(() => tone(1100, 0.2,  0.5, 'sine'), 300)
+    const snd = getOrderSound()
+    snd.currentTime = 0
+    snd.play().catch(() => {
+      // Fallback to bell MP3
+      try {
+        const bell = getBell()
+        bell.currentTime = 0
+        bell.play().catch(() => {
+          tone(660, 0.12, 0.5, 'sine')
+          setTimeout(() => tone(880, 0.12, 0.5, 'sine'), 150)
+          setTimeout(() => tone(1100, 0.2, 0.5, 'sine'), 300)
+        })
+      } catch {
+        tone(660, 0.12, 0.5, 'sine')
+        setTimeout(() => tone(880, 0.12, 0.5, 'sine'), 150)
+        setTimeout(() => tone(1100, 0.2, 0.5, 'sine'), 300)
+      }
     })
   } catch {
     tone(660, 0.12, 0.5, 'sine')
     setTimeout(() => tone(880, 0.12, 0.5, 'sine'), 150)
-    setTimeout(() => tone(1100, 0.2,  0.5, 'sine'), 300)
+    setTimeout(() => tone(1100, 0.2, 0.5, 'sine'), 300)
   }
 }
 
