@@ -90,43 +90,59 @@ jobs:
           $content = [System.IO.File]::ReadAllText($keyPath) -replace "`r`n", "`n" -replace "`r", "`n"
           [System.IO.File]::WriteAllText($keyPath, $content)
 
-          $script = @'
-          cd /www/wwwroot/cardyn.net/downloads
-          EXE=$(ls "Cardyn Staff Setup"*.exe 2>/dev/null | sort -V | tail -1)
-          if [ -z "$EXE" ]; then EXE=$(ls *.exe 2>/dev/null | sort -V | tail -1); fi
-          if [ -n "$EXE" ] && [ -f "$EXE" ]; then
-            VERSION=$(echo "$EXE" | grep -oP '\d+\.\d+\.\d+' | head -1)
-            RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-            SIZE=$(stat -c%s "$EXE")
-            SHA512=$(sha512sum "$EXE" | awk '{print $1}' | xxd -r -p | base64 -w0)
-            EXE_ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$EXE'))")
-            cat > latest.yml << YMLEOF
-          version: $VERSION
-          files:
-            - url: $EXE_ENCODED
-              sha512: $SHA512
-              size: $SIZE
-          path: $EXE_ENCODED
-          sha512: $SHA512
-          releaseDate: '$RELEASE_DATE'
-          YMLEOF
-            echo "Done: version=$VERSION file=$EXE"
-            cat latest.yml
-          else
-            echo "ERROR: no exe found"; ls -la; exit 1
-          fi
-          '@
+          # Write the bash script to a temp file with Unix line endings (no \r)
+          $scriptPath = "$env:TEMP\gen_latest.sh"
+          $scriptLines = @(
+            "#!/bin/bash",
+            "set -e",
+            "cd /www/wwwroot/cardyn.net/downloads",
+            'EXE=$(ls "Cardyn Staff Setup"*.exe 2>/dev/null | sort -V | tail -1)',
+            'if [ -z "$EXE" ]; then EXE=$(ls *.exe 2>/dev/null | sort -V | tail -1); fi',
+            'if [ -z "$EXE" ] || [ ! -f "$EXE" ]; then echo "ERROR: no exe found"; ls -la; exit 1; fi',
+            'VERSION=$(echo "$EXE" | grep -oP "\\d+\\.\\d+\\.\\d+" | head -1)',
+            'RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")',
+            'SIZE=$(stat -c%s "$EXE")',
+            'SHA512=$(sha512sum "$EXE" | awk "{print \$1}" | xxd -r -p | base64 -w0)',
+            'EXE_ENCODED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$EXE")',
+            'cat > latest.yml << YMLEOF',
+            'version: '"'"'$VERSION'"'"'',
+            'files:',
+            '  - url: $EXE_ENCODED',
+            '    sha512: $SHA512',
+            '    size: $SIZE',
+            'path: $EXE_ENCODED',
+            'sha512: $SHA512',
+            'releaseDate: '"'"'$RELEASE_DATE'"'"'',
+            'YMLEOF',
+            'echo "Done: version=$VERSION file=$EXE"',
+            'cat latest.yml'
+          )
+          # Join with Unix newlines only
+          $scriptContent = $scriptLines -join "`n"
+          [System.IO.File]::WriteAllText($scriptPath, $scriptContent + "`n")
+
+          # SCP the script to server then execute it
+          $scpScript = @(
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-i", $keyPath,
+            $scriptPath,
+            "$($env:SERVER_USER)@$($env:SERVER_HOST):/tmp/gen_latest.sh"
+          )
+          & scp @scpScript
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $sshArgs = @(
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
             "-i", $keyPath,
             "$($env:SERVER_USER)@$($env:SERVER_HOST)",
-            $script
+            "bash /tmp/gen_latest.sh && rm /tmp/gen_latest.sh"
           )
           & ssh @sshArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Remove-Item $keyPath -Force
+          Remove-Item $scriptPath -Force
 
       - name: Get version
         id: version
