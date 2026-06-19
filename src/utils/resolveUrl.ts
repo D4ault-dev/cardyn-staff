@@ -46,3 +46,15 @@ export function resolveUrl(url: string | null | undefined): string {
 
   return resolved
 }
+
+/**
+ * Format a user ID as a 4-digit display ID.
+ * e.g. 186 → "0186", 1306 → "1306", 1420 → "1420"
+ * Consistent across Orders, Withdrawals, Chat, Users screens.
+ */
+export function fmtUid(id: number | string | null | undefined): string {
+  if (id === null || id === undefined || id === '') return '—'
+  const n = Number(id)
+  if (isNaN(n)) return String(id)
+  return String(n).padStart(4, '0')
+}

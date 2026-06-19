@@ -9,7 +9,7 @@ import { canHandleChat } from '../utils/roles'
 import { ChatWebSocket } from '../api/ws'
 import client from '../api/client'
 import { playNewMessage } from '../utils/sound'
-import { resolveUrl } from '../utils/resolveUrl'
+import { resolveUrl, fmtUid } from '../utils/resolveUrl'
 import './ChatScreen.css'
 
 async function copyImageToClipboard(url: string): Promise<void> {
@@ -400,8 +400,8 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
               </div>
               <div className="si-info">
                 <div className="si-top">
-                  <span className="si-uid">{s.userId}</span>
-                  <span className="si-name">{s.userName || `用户#${s.userId}`}</span>
+                  <span className="si-uid">{fmtUid(s.userId)}</span>
+                  <span className="si-name">{s.userName || `用户#${fmtUid(s.userId)}`}</span>
                   {s.unreadCount > 0 && s.status !== 'closed' && <span className="si-badge">{s.unreadCount}</span>}
                 </div>
                 <div className="si-msg">{s.lastMessage || '暂无消息'}</div>
@@ -420,8 +420,8 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
             <div className="ch-left">
               <div className="ch-avatar">{(active.userName || 'U')[0].toUpperCase()}</div>
               <div>
-                <div className="ch-name">{active.userName || `用户#${active.userId}`}
-                  <span className="ch-uid"> #{active.userId}</span>
+                <div className="ch-name">{active.userName || `用户#${fmtUid(active.userId)}`}
+                  <span className="ch-uid"> #{fmtUid(active.userId)}</span>
                 </div>
                 <div className="ch-status" style={{ color: statusColor(active.status) }}>
                   ● {active.status === 'claimed' ? `已接入 · ${active.agentName}` : active.status === 'open' ? '等待接入' : '已关闭'}

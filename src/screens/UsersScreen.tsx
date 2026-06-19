@@ -3,6 +3,7 @@ import { getUsers, setUserStatus } from '../api/users'
 import type { AppUser } from '../types'
 import { useAuth } from '../context/AuthContext'
 import { ROLES, isSuper } from '../utils/roles'
+import { fmtUid } from '../utils/resolveUrl'
 import DateRangePicker from '../components/DateRangePicker'
 import './OrdersScreen.css'
 import './UsersScreen.css'
@@ -132,7 +133,7 @@ export default function UsersScreen() {
             {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={11} className="table-empty">暂无数据</td></tr>}
             {!(loading && firstLoad) && rows.map(r => (
               <tr key={r.userId}>
-                <td><span className="mono" style={{ fontWeight: 700, color: '#1677ff' }}>{r.userId}</span></td>
+                <td><span className="mono" style={{ fontWeight: 700, color: '#1677ff' }}>{fmtUid(r.userId)}</span></td>
                 <td className="mono">{r.phone || '—'}</td>
                 <td className="mono" style={{ fontSize: 11, color: '#888' }}>{r.email || '—'}</td>
                 <td>{r.realName || '—'}</td>
@@ -192,7 +193,7 @@ export default function UsersScreen() {
                 </div>
               )}
               <div className="user-detail-grid">
-                <div className="udg-item"><span className="udg-label">用户ID</span><span className="udg-value" style={{ fontWeight: 700, color: '#1677ff' }}>{detail.userId}</span></div>
+                <div className="udg-item"><span className="udg-label">用户ID</span><span className="udg-value" style={{ fontWeight: 700, color: '#1677ff', fontFamily: 'monospace' }}>{fmtUid(detail.userId)}</span></div>
                 <div className="udg-item"><span className="udg-label">Profile ID</span><span className="udg-value mono" style={{ color: '#999', fontSize: 11 }}>{detail.id}</span></div>
                 <div className="udg-item"><span className="udg-label">手机号</span><span className="udg-value mono">{detail.phone || '—'}</span></div>
                 <div className="udg-item"><span className="udg-label">邮箱</span><span className="udg-value">{detail.email || '—'}</span></div>
