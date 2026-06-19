@@ -8,7 +8,7 @@ import { canVerifyOrders, isSuper } from '../utils/roles'
 import { playSuccess, playError } from '../utils/sound'
 import DateRangePicker from '../components/DateRangePicker'
 import Img from '../components/Img'
-import { resolveUrl } from '../utils/resolveUrl'
+import { resolveUrl, fmtUid } from '../utils/resolveUrl'
 import './OrdersScreen.css'
 
 /** Copy an image URL to the system clipboard as an image (paste into WeChat/WhatsApp etc.) */
@@ -404,7 +404,7 @@ export default function OrdersScreen({
             {!(loading && firstLoad) && rows.map(r => (
               <tr key={r.id}>
                 <td>{r.id}</td>
-                <td>{r.userId}</td>
+                <td><span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{fmtUid(r.userId)}</span></td>
                 <td className="mono">{r.orderNo}</td>
                 <td>{r.categoryName}</td>
                 <td className="country-cell">{countryLabel(r.cardCurrency)}</td>
@@ -480,7 +480,7 @@ export default function OrdersScreen({
               <div className="form-row">
                 <label className="form-label">用户信息：</label>
                 <span className="form-inline-label">ID：</span>
-                <input className="form-input short" readOnly value={verifyData.userId} />
+                <input className="form-input short" readOnly value={fmtUid(verifyData.userId)} />
                 <span className="form-inline-label" style={{ marginLeft: 12 }}>备注：</span>
                 <input className="form-input short" readOnly value={verifyData.verifyRemark || ''} />
               </div>
@@ -586,8 +586,8 @@ export default function OrdersScreen({
                         </>
                       ) : (
                         <>
-                          <span style={{ fontSize: 24, color: '#1677ff' }}>📤</span>
-                          <span style={{ fontSize: 11, color: '#999', marginTop: 4, textAlign: 'center' }}>上传凭证<br/>支持拖拽</span>
+                          <span style={{ fontSize: 13, color: '#999' }}>点击上传</span>
+                          <span style={{ fontSize: 11, color: '#999', marginTop: 4, textAlign: 'center' }}>支持拖拽</span>
                         </>
                       )}
                       <input type="file" accept="image/*" style={{ display: 'none' }}
@@ -700,7 +700,7 @@ export default function OrdersScreen({
               <div className="form-row">
                 <label className="form-label">用户信息：</label>
                 <span className="form-inline-label">用户id</span>
-                <input className="form-input short" readOnly value={cardData.userId} />
+                <input className="form-input short" readOnly value={fmtUid(cardData.userId)} />
                 <span className="form-inline-label" style={{ marginLeft: 12 }}>用户备注</span>
                 <input className="form-input medium" readOnly value={cardData.verifyRemark || ''} />
               </div>

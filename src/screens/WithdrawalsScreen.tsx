@@ -8,7 +8,7 @@ import { getWithdrawalFee } from '../api/config'
 import client from '../api/client'
 import DateRangePicker from '../components/DateRangePicker'
 import Img from '../components/Img'
-import { resolveUrl } from '../utils/resolveUrl'
+import { resolveUrl, fmtUid } from '../utils/resolveUrl'
 import './OrdersScreen.css'
 import './WithdrawalsScreen.css'
 
@@ -275,7 +275,7 @@ export default function WithdrawalsScreen({
               return (
                 <tr key={r.id}>
                   <td>{r.id}</td>
-                  <td>{r.username || r.userId}</td>
+                  <td><span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{fmtUid(r.userId)}</span></td>
                   <td className="mono">{r.withdrawNo}</td>
                   <td>{r.bankName}</td>
                   <td>{r.accountName}</td>
@@ -335,7 +335,8 @@ export default function WithdrawalsScreen({
             <div className="modal-head"><span>提现详情</span><button onClick={() => setDetail(null)}>✕</button></div>
             <div className="modal-body">
               <div className="form-row"><label className="form-label">提现单号：</label><input className="form-input" readOnly value={detail.withdrawNo} /></div>
-              <div className="form-row"><label className="form-label">用户：</label><input className="form-input" readOnly value={String(detail.username || detail.userId)} /></div>
+              <div className="form-row"><label className="form-label">用户ID：</label><input className="form-input short" readOnly value={fmtUid(detail.userId)} style={{ fontFamily: 'monospace', fontWeight: 700 }} /></div>
+              <div className="form-row"><label className="form-label">用户名：</label><input className="form-input" readOnly value={String(detail.username || '')} /></div>
               <div className="form-row"><label className="form-label">银行：</label><input className="form-input" readOnly value={detail.bankName} /></div>
               <div className="form-row"><label className="form-label">账户名：</label><input className="form-input" readOnly value={detail.accountName} /></div>
               <div className="form-row"><label className="form-label">账号：</label><input className="form-input" readOnly value={detail.accountNo} /></div>
@@ -425,7 +426,7 @@ export default function WithdrawalsScreen({
           <div className="modal-box small" onClick={e => e.stopPropagation()}>
             <div className="modal-head"><span>拒绝提现</span><button onClick={() => { setRejectModal(null); setRejectFile(null) }}>✕</button></div>
             <div className="modal-body">
-              <div className="form-row"><label className="form-label">用户：</label><input className="form-input" readOnly value={String(rejectModal.username || rejectModal.userId)} /></div>
+              <div className="form-row"><label className="form-label">用户ID：</label><input className="form-input short" readOnly value={fmtUid(rejectModal.userId)} style={{ fontFamily: 'monospace', fontWeight: 700 }} /></div>
               <div className="form-row"><label className="form-label">金额：</label><span className="amount-red" style={{ fontSize: 15, fontWeight: 700 }}>{fmtNgn(rejectModal.amount)}</span></div>
               <textarea className="audit-remark" placeholder="拒绝原因（必填）" rows={3}
                 value={remark} onChange={e => setRemark(e.target.value)} />
@@ -440,7 +441,7 @@ export default function WithdrawalsScreen({
                     </div>
                   ) : (
                     <div className="audit-img-placeholder">
-                      <span className="audit-img-icon">[ IMG ]</span>
+                      <span className="audit-img-icon">图片</span>
                       <span>点击上传 或 Ctrl+V 粘贴</span>
                     </div>
                   )}
