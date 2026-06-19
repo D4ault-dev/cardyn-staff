@@ -27,6 +27,14 @@ function setupAutoUpdater(win) {
     win.webContents.send('update-available')
   })
 
+  autoUpdater.on('update-not-available', () => {
+    win.webContents.send('update-not-available')
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    win.webContents.send('download-progress', Math.round(progress.percent))
+  })
+
   autoUpdater.on('update-downloaded', (info) => {
     win.webContents.send('update-downloaded', info.version)
   })
