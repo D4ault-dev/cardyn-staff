@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  # ── Windows build ────────────────────────────────────────────────────────────
+  build-windows:
     runs-on: windows-latest
     permissions:
       contents: write
@@ -21,105 +22,167 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build (Windows x64)
-        run: npm run electron:build
+      - name: Build Windows x64
+        run: npm run electron:build -- --win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Find built exe
-        id: find_exe
+      - name: Find built files
+        id: find_win
         shell: powershell
         run: |
-          $exe = Get-ChildItem -Path "dist-electron" -Filter "*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $exe = Get-ChildItem -Path "dist-electron" -Filter "*.exe" | Where-Object { $_.Name -notlike "*unpacked*" } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $exe) { Write-Error "No .exe found in dist-electron"; exit 1 }
           echo "EXE_PATH=$($exe.FullName)" >> $env:GITHUB_OUTPUT
           echo "EXE_NAME=$($exe.Name)" >> $env:GITHUB_OUTPUT
-          echo "Found: $($exe.FullName)"
+          Write-Host "Found exe: $($exe.FullName)"
 
-      - name: Upload exe to server via SCP
+          $yml = Get-ChildItem -Path "dist-electron" -Filter "latest.yml" | Select-Object -First 1
+          if ($yml) {
+            echo "YML_PATH=$($yml.FullName)" >> $env:GITHUB_OUTPUT
+            Write-Host "Found yml: $($yml.FullName)"
+          }
+
+      - name: Upload Windows files to server
         shell: powershell
         env:
           SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
-          EXE_PATH: ${{ steps.find_exe.outputs.EXE_PATH }}
-          EXE_NAME: ${{ steps.find_exe.outputs.EXE_NAME }}
+          EXE_PATH: ${{ steps.find_win.outputs.EXE_PATH }}
+          EXE_NAME: ${{ steps.find_win.outputs.EXE_NAME }}
+          YML_PATH: ${{ steps.find_win.outputs.YML_PATH }}
         run: |
-          # Write SSH key to temp file
-          $keyPath = "$env:TEMP\deploy_key"
+          $keyPath = "$env:TEMP\deploy_key_win"
           $env:SSH_KEY | Out-File -FilePath $keyPath -Encoding ascii -NoNewline
-          
-          # Fix line endings (key must be Unix format)
           $content = [System.IO.File]::ReadAllText($keyPath) -replace "`r`n", "`n" -replace "`r", "`n"
           [System.IO.File]::WriteAllText($keyPath, $content)
 
-          # Ensure downloads directory exists on server before SCP
-          $sshArgs = @(
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-i", $keyPath,
-            "$($env:SERVER_USER)@$($env:SERVER_HOST)",
-            "sudo mkdir -p /www/wwwroot/cardyn.net/downloads && sudo chmod 755 /www/wwwroot/cardyn.net/downloads && sudo chown $($env:SERVER_USER):$($env:SERVER_USER) /www/wwwroot/cardyn.net/downloads"
-          )
-          & ssh @sshArgs
-          if ($LASTEXITCODE -ne 0) { Write-Warning "mkdir/chmod failed but continuing..." }
+          # Ensure downloads dir exists
+          & ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $keyPath `
+            "$($env:SERVER_USER)@$($env:SERVER_HOST)" `
+            "mkdir -p /www/wwwroot/cardyn.net/downloads && chmod 755 /www/wwwroot/cardyn.net/downloads"
+          if ($LASTEXITCODE -ne 0) { Write-Warning "mkdir failed but continuing..." }
 
-          # SCP the exe to server
-          $scpArgs = @(
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-i", $keyPath,
-            $env:EXE_PATH,
+          # Upload exe
+          & scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $keyPath `
+            $env:EXE_PATH `
             "$($env:SERVER_USER)@$($env:SERVER_HOST):/www/wwwroot/cardyn.net/downloads/"
-          )
-          & scp @scpArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          
-          Remove-Item $keyPath -Force
-          echo "Uploaded: $env:EXE_NAME"
 
-      - name: Generate latest.yml on server
-        shell: powershell
+          # Upload latest.yml (electron-builder generates this with correct sha512)
+          if ($env:YML_PATH -and (Test-Path $env:YML_PATH)) {
+            & scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $keyPath `
+              $env:YML_PATH `
+              "$($env:SERVER_USER)@$($env:SERVER_HOST):/www/wwwroot/cardyn.net/downloads/latest.yml"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host "Uploaded latest.yml"
+          } else {
+            Write-Host "No latest.yml found, skipping"
+          }
+
+          Remove-Item $keyPath -Force
+          Write-Host "Windows upload complete: $env:EXE_NAME"
+
+  # ── macOS build ──────────────────────────────────────────────────────────────
+  build-mac:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build macOS (arm64 + x64)
+        run: npm run electron:build -- --mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Skip code signing — distribute unsigned for internal staff use
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Find built files
+        id: find_mac
+        run: |
+          echo "=== dist-electron contents ==="
+          ls -la dist-electron/ || true
+
+          # Find dmg files
+          DMG_ARM=$(ls dist-electron/*arm64*.dmg 2>/dev/null | head -1 || echo "")
+          DMG_X64=$(ls dist-electron/*.dmg 2>/dev/null | grep -v arm64 | head -1 || echo "")
+          ZIP_ARM=$(ls dist-electron/*arm64*.zip 2>/dev/null | head -1 || echo "")
+          ZIP_X64=$(ls dist-electron/*.zip 2>/dev/null | grep -v arm64 | head -1 || echo "")
+          YML=$(ls dist-electron/latest-mac.yml 2>/dev/null | head -1 || echo "")
+
+          echo "DMG_ARM=$DMG_ARM" >> $GITHUB_OUTPUT
+          echo "DMG_X64=$DMG_X64" >> $GITHUB_OUTPUT
+          echo "ZIP_ARM=$ZIP_ARM" >> $GITHUB_OUTPUT
+          echo "ZIP_X64=$ZIP_X64" >> $GITHUB_OUTPUT
+          echo "YML=$YML" >> $GITHUB_OUTPUT
+
+          echo "arm64 dmg: $DMG_ARM"
+          echo "x64 dmg: $DMG_X64"
+          echo "latest-mac.yml: $YML"
+
+      - name: Upload macOS files to server
         env:
           SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
+          DMG_ARM: ${{ steps.find_mac.outputs.DMG_ARM }}
+          DMG_X64: ${{ steps.find_mac.outputs.DMG_X64 }}
+          ZIP_ARM: ${{ steps.find_mac.outputs.ZIP_ARM }}
+          ZIP_X64: ${{ steps.find_mac.outputs.ZIP_X64 }}
+          YML: ${{ steps.find_mac.outputs.YML }}
         run: |
-          $keyPath = "$env:TEMP\deploy_key2"
-          $env:SSH_KEY | Out-File -FilePath $keyPath -Encoding ascii -NoNewline
-          $content = [System.IO.File]::ReadAllText($keyPath) -replace "`r`n", "`n" -replace "`r", "`n"
-          [System.IO.File]::WriteAllText($keyPath, $content)
+          KEY_PATH=$(mktemp)
+          echo "$SSH_KEY" > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
 
-          # SCP the pre-written bash script (already has Unix line endings)
-          $scpScript = @(
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-i", $keyPath,
-            "scripts\gen_latest.sh",
-            "$($env:SERVER_USER)@$($env:SERVER_HOST):/tmp/gen_latest.sh"
-          )
-          & scp @scpScript
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $KEY_PATH"
 
-          # Execute the script on the server — strip any CRLF just in case
-          $sshArgs = @(
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-i", $keyPath,
-            "$($env:SERVER_USER)@$($env:SERVER_HOST)",
-            "sed -i 's/\r//' /tmp/gen_latest.sh && bash /tmp/gen_latest.sh && rm /tmp/gen_latest.sh"
-          )
-          & ssh @sshArgs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Remove-Item $keyPath -Force
+          # Ensure downloads dir exists
+          ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
+            "mkdir -p /www/wwwroot/cardyn.net/downloads && chmod 755 /www/wwwroot/cardyn.net/downloads"
+
+          # Upload each file if it exists
+          for FILE in "$DMG_ARM" "$DMG_X64" "$ZIP_ARM" "$ZIP_X64"; do
+            if [ -n "$FILE" ] && [ -f "$FILE" ]; then
+              scp $SSH_OPTS "$FILE" "$SERVER_USER@$SERVER_HOST:/www/wwwroot/cardyn.net/downloads/"
+              echo "Uploaded: $(basename $FILE)"
+            fi
+          done
+
+          # Upload latest-mac.yml
+          if [ -n "$YML" ] && [ -f "$YML" ]; then
+            scp $SSH_OPTS "$YML" "$SERVER_USER@$SERVER_HOST:/www/wwwroot/cardyn.net/downloads/latest-mac.yml"
+            echo "Uploaded latest-mac.yml"
+          fi
+
+          rm -f "$KEY_PATH"
+          echo "macOS upload complete"
+
+  # ── GitHub Release (after both builds) ──────────────────────────────────────
+  release:
+    needs: [build-windows, build-mac]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Get version
         id: version
-        shell: powershell
         run: |
-          $v = node -p "require('./package.json').version"
-          echo "version=$v" >> $env:GITHUB_OUTPUT
-          echo "tag=v$v-build.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION-build.${{ github.run_number }}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -129,11 +192,13 @@ jobs:
           body: |
             ## Cardyn Staff Desktop v${{ steps.version.outputs.version }}
 
-            | Platform | Download | Notes |
-            |----------|----------|-------|
-            | 🪟 Windows | [Download .exe](https://cardyn.net/downloads/Cardyn%20Staff%20Setup%20${{ steps.version.outputs.version }}.exe) | Windows 10/11 |
+            | Platform | Download |
+            |----------|----------|
+            | Windows | [Cardyn Staff Setup ${{ steps.version.outputs.version }}.exe](https://cardyn.net/downloads/Cardyn%20Staff%20Setup%20${{ steps.version.outputs.version }}.exe) |
+            | macOS (Apple Silicon) | [Cardyn Staff-${{ steps.version.outputs.version }}-arm64.dmg](https://cardyn.net/downloads/Cardyn%20Staff-${{ steps.version.outputs.version }}-arm64.dmg) |
+            | macOS (Intel) | [Cardyn Staff-${{ steps.version.outputs.version }}.dmg](https://cardyn.net/downloads/Cardyn%20Staff-${{ steps.version.outputs.version }}.dmg) |
 
-            > Installed users get auto-update within 4 hours.
+            > Staff with existing installs get auto-update within 4 hours, or click **检查更新** immediately.
 
             **Build:** ${{ github.run_number }} | **Commit:** ${{ github.sha }}
           generate_release_notes: false

@@ -8,14 +8,17 @@ const isDev = !app.isPackaged
 function setupAutoUpdater(win) {
   if (isDev) return
 
-  // Point to your server where GitHub Actions uploads the latest.yml + installers
+  // electron-updater with 'generic' provider:
+  //   Windows → fetches latest.yml
+  //   macOS   → fetches latest-mac.yml
+  // Both are uploaded by the build workflow to the same downloads folder.
   autoUpdater.setFeedURL({
     provider: 'generic',
     url: 'https://cardyn.net/downloads/',
   })
 
   autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true  // install when app quits naturally
+  autoUpdater.autoInstallOnAppQuit = true
 
   // Check on startup after 10s
   setTimeout(() => autoUpdater.checkForUpdates(), 10_000)

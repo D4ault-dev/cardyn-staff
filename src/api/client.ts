@@ -13,7 +13,7 @@ export function setBaseUrl(url: string) {
 // ── Short-lived GET cache — deduplicates identical requests within 30s ────────
 // NOTE: Real-time endpoints (poll, chat messages) are excluded — see CACHE_EXCLUDE
 const _cache = new Map<string, { data: any; ts: number }>()
-const CACHE_TTL = 5_000  // 5 seconds — stale-while-revalidate
+const CACHE_TTL = 30_000  // 30 seconds — stale-while-revalidate
 
 // Endpoints that must NEVER be cached — they are real-time pollers
 const CACHE_EXCLUDE = [
@@ -68,7 +68,7 @@ const _inflight = new Map<string, Promise<any>>()
 // ── Axios instance ────────────────────────────────────────────────────────────
 const client = axios.create({
   baseURL: BASE_URL,
-  timeout: 6000,  // 6s — fail fast on bad network
+  timeout: 15000,  // 15s — allows for slow server responses on bad network
   headers: { 'Content-Type': 'application/json' },
 })
 
