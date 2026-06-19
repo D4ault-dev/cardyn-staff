@@ -96,7 +96,8 @@ export type OnlineStaff = {
 }
 
 export type AppUser = {
-  id: number
+  id: number        // tuka_user_profile.id (row ID — internal only)
+  userId: number    // sys_user.user_id (real system ID — use this everywhere)
   phone: string
   email: string
   realName: string
@@ -108,5 +109,6 @@ export type AppUser = {
   tradeCount: number
   status: number
   country: string
+  inviteCode: string | null
   createTime: string
 }

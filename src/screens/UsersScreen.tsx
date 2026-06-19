@@ -68,12 +68,12 @@ export default function UsersScreen() {
   async function handleToggleStatus(r: AppUser) {
     const newStatus = r.status === 1 ? 0 : 1
     const action = newStatus === 0 ? '封禁' : '解封'
-    if (!confirm(`确定${action}用户 ${r.phone}？`)) return
-    setToggling(r.id)
+    if (!confirm(`确定${action}用户 ${r.phone || r.userId}？`)) return
+    setToggling(r.userId)
     try {
-      await setUserStatus(r.id, newStatus as 0 | 1)
-      setRows(prev => prev.map(u => u.id === r.id ? { ...u, status: newStatus } : u))
-      if (detail?.id === r.id) setDetail(prev => prev ? { ...prev, status: newStatus } : prev)
+      await setUserStatus(r.userId, newStatus as 0 | 1)
+      setRows(prev => prev.map(u => u.userId === r.userId ? { ...u, status: newStatus } : u))
+      if (detail?.userId === r.userId) setDetail(prev => prev ? { ...prev, status: newStatus } : prev)
     } catch (e: any) { alert(e.message) }
     finally { setToggling(null) }
   }
@@ -102,12 +102,14 @@ export default function UsersScreen() {
         <table className="orders-table">
           <thead>
             <tr>
-              <th>ID</th>
+              <th>用户ID</th>
               <th>手机号</th>
+              <th>邮箱</th>
               <th>真实姓名</th>
               <th>余额</th>
               <th>总销售额</th>
               <th>交易次数</th>
+              <th>邀请码</th>
               <th>等级</th>
               <th>国家</th>
               <th>状态</th>
@@ -129,13 +131,15 @@ export default function UsersScreen() {
             )}
             {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={11} className="table-empty">暂无数据</td></tr>}
             {!(loading && firstLoad) && rows.map(r => (
-              <tr key={r.id}>
-                <td>{r.id}</td>
-                <td className="mono">{r.phone}</td>
-                <td>{r.realName || r.phone}</td>
+              <tr key={r.userId}>
+                <td><span className="mono" style={{ fontWeight: 700, color: '#1677ff' }}>{r.userId}</span></td>
+                <td className="mono">{r.phone || '—'}</td>
+                <td className="mono" style={{ fontSize: 11, color: '#888' }}>{r.email || '—'}</td>
+                <td>{r.realName || '—'}</td>
                 <td className="amount-green">{fmtNgn(r.balance)}</td>
                 <td className="amount-green">{fmtNgn(r.totalSales)}</td>
                 <td>{r.tradeCount}</td>
+                <td><span className="mono" style={{ fontSize: 11 }}>{r.inviteCode || '—'}</span></td>
                 <td>Lv {r.level}</td>
                 <td>{r.country || '—'}</td>
                 <td>
@@ -149,11 +153,11 @@ export default function UsersScreen() {
                   {canManage && (
                     <button
                       className={'act-btn ' + (r.status === 1 ? 'danger' : 'primary')}
-                      disabled={toggling === r.id}
+                      disabled={toggling === r.userId}
                       onClick={() => handleToggleStatus(r)}
                       style={{ marginLeft: 4 }}
                     >
-                      {toggling === r.id ? '…' : r.status === 1 ? '封禁' : '解封'}
+                      {toggling === r.userId ? '…' : r.status === 1 ? '封禁' : '解封'}
                     </button>
                   )}
                 </td>
@@ -188,10 +192,12 @@ export default function UsersScreen() {
                 </div>
               )}
               <div className="user-detail-grid">
-                <div className="udg-item"><span className="udg-label">ID</span><span className="udg-value">{detail.id}</span></div>
-                <div className="udg-item"><span className="udg-label">手机号</span><span className="udg-value mono">{detail.phone}</span></div>
+                <div className="udg-item"><span className="udg-label">用户ID</span><span className="udg-value" style={{ fontWeight: 700, color: '#1677ff' }}>{detail.userId}</span></div>
+                <div className="udg-item"><span className="udg-label">Profile ID</span><span className="udg-value mono" style={{ color: '#999', fontSize: 11 }}>{detail.id}</span></div>
+                <div className="udg-item"><span className="udg-label">手机号</span><span className="udg-value mono">{detail.phone || '—'}</span></div>
                 <div className="udg-item"><span className="udg-label">邮箱</span><span className="udg-value">{detail.email || '—'}</span></div>
                 <div className="udg-item"><span className="udg-label">真实姓名</span><span className="udg-value">{detail.realName || '—'}</span></div>
+                <div className="udg-item"><span className="udg-label">邀请码</span><span className="udg-value mono">{detail.inviteCode || '—'}</span></div>
                 <div className="udg-item"><span className="udg-label">余额</span><span className="udg-value amount-green">{fmtNgn(detail.balance)}</span></div>
                 <div className="udg-item"><span className="udg-label">总销售额</span><span className="udg-value amount-green">{fmtNgn(detail.totalSales)}</span></div>
                 <div className="udg-item"><span className="udg-label">总提现</span><span className="udg-value">{fmtNgn(detail.totalWithdrawn)}</span></div>

@@ -417,36 +417,13 @@ export default function OrdersScreen({
                 </td>
                 <td>
                   <div className="action-btns">
-                    <button className="act-btn blue" onClick={() => { setVerifyData(r); setEditingNewAmount(String(r.newAmount ?? r.ngnAmount ?? '')) }}>查看数据</button>
+                    <button className="act-btn blue" onClick={() => { setVerifyData(r); setEditingNewAmount(String(r.newAmount ?? r.ngnAmount ?? '')); setAuditRemark(''); setAuditImgFile(null); setAdjustedAmount('') }}>查看数据</button>
                     <button className="act-btn green" onClick={() => setCardData(r)}>查看</button>
-                    {canVerify && r.status === 'pending' ? (
-                      <>
-                        <button className="act-btn primary"
-                          onClick={() => { setAuditRow(r); setAuditResult('paid'); setAuditRemark(''); setAdjustedAmount('') }}>
-                          核销完成
-                        </button>
-                        <button className="act-btn danger"
-                          onClick={() => { setAuditRow(r); setAuditResult('rejected'); setAuditRemark(''); setAdjustedAmount('') }}>
-                          失败
-                        </button>
-                      </>
-                    ) : canVerify && r.status === 'processing' && (
-                        isSuper(user?.roleType || '') ||
-                        String((r as any).staffId) === String(user?.userId)
-                      ) ? (
-                      <>
-                        <button className="act-btn primary"
-                          onClick={() => { setAuditRow(r); setAuditResult('paid'); setAuditRemark(''); setAdjustedAmount('') }}>
-                          核销完成
-                        </button>
-                        <button className="act-btn danger"
-                          onClick={() => { setAuditRow(r); setAuditResult('rejected'); setAuditRemark(''); setAdjustedAmount('') }}>
-                          失败
-                        </button>
-                      </>
-                    ) : r.status === 'rejected' ? (
-                      <span className="reject-tag">{r.rejectReason || 'bad card'}</span>
-                    ) : null}
+                    {/* Status badge only — audit actions moved inside 查看数据 modal */}
+                    {r.status === 'paid' && <span className="status-badge paid">核销完成</span>}
+                    {r.status === 'rejected' && <span className="status-badge rejected" title={r.rejectReason || 'bad card'}>失败</span>}
+                    {r.status === 'pending' && <span className="status-badge pending">待处理</span>}
+                    {r.status === 'processing' && <span className="status-badge processing">处理中</span>}
                   </div>
                 </td>
               </tr>
@@ -474,13 +451,13 @@ export default function OrdersScreen({
         </select>
       </div>
 
-      {/* ── 核销数据 modal (查看数据 button) — matches screenshot 1 ── */}
+      {/* ── 查看数据 modal: title = '核销' for active, '核销数据' for paid/rejected ── */}
       {verifyData && (
-        <div className="modal-mask" onClick={() => setVerifyData(null)}>
+        <div className="modal-mask" onClick={() => { setVerifyData(null); setAuditRemark(''); setAuditImgFile(null) }}>
           <div className="modal-box wide" onClick={e => e.stopPropagation()}>
             <div className="modal-head">
-              <span>核销数据</span>
-              <button onClick={() => setVerifyData(null)}>✕</button>
+              <span>{(verifyData.status === 'pending' || verifyData.status === 'processing') ? '核销' : '核销数据'}</span>
+              <button onClick={() => { setVerifyData(null); setAuditRemark(''); setAuditImgFile(null) }}>✕</button>
             </div>
             <div className="modal-body">
               {/* 基础信息 row */}
@@ -519,49 +496,47 @@ export default function OrdersScreen({
                 <input className="form-input short" readOnly value={verifyData.sellRate ?? ''} />
               </div>
 
-              {/* 结算金额 */}
+              {/* 结算金额 row — active: editable + red button; paid: readonly, no button */}
               <div className="form-row">
                 <label className="form-label">结算金额：</label>
-                <span className="form-inline-label">原始金额</span>
-                <input className="form-input medium" readOnly value={fmtNgn(verifyData.ngnAmount)} style={{ color: '#888', background: '#fafafa' }} />
-                <span className="form-inline-label" style={{ marginLeft: 12, color: '#f59e0b', fontWeight: 700 }}>实付金额</span>
+                <span className="form-inline-label">结算金额</span>
+                <input className="form-input medium" readOnly
+                  value={fmtNgn(verifyData.ngnAmount)}
+                  style={{ color: '#888', background: '#fafafa' }} />
+                <span className="form-inline-label" style={{ marginLeft: 10 }}>结算数量</span>
+                <input className="form-input" readOnly
+                  value={verifyData.quantity ?? 1}
+                  style={{ width: 50, color: '#888', background: '#fafafa' }} />
+                <span className="form-inline-label" style={{ marginLeft: 10 }}>变更结算金额</span>
                 <input
-                  className="form-input short"
+                  className="form-input"
                   type="number"
+                  readOnly={verifyData.status === 'paid' || verifyData.status === 'rejected'}
                   value={editingNewAmount}
                   onChange={e => setEditingNewAmount(e.target.value)}
-                  placeholder="实付金额"
-                  style={{ borderColor: '#f59e0b', fontWeight: 600 }}
+                  style={{ width: 120, background: (verifyData.status === 'paid' || verifyData.status === 'rejected') ? '#fafafa' : undefined, color: (verifyData.status === 'paid' || verifyData.status === 'rejected') ? '#888' : undefined }}
                 />
-                <button
-                  className="act-btn primary"
-                  style={{ marginLeft: 8, whiteSpace: 'nowrap' }}
-                  disabled={savingNewAmount}
-                  onClick={async () => {
-                    const amt = parseFloat(editingNewAmount)
-                    if (isNaN(amt) || amt <= 0) { alert('请输入有效金额'); return }
-                    setSavingNewAmount(true)
-                    try {
-                      // Send status as current status — backend detects already-paid
-                      // and only adjusts the delta, never double-credits
-                      await client.put('/tuka/order/audit', {
-                        id: verifyData.id,
-                        status: verifyData.status,
-                        verifyRemark: verifyData.verifyRemark || '',
-                        newAmount: amt,
-                        amountUpdateOnly: true,  // hint to backend: only update amount, no re-pay
-                      })
-                      setVerifyData((prev: any) => prev ? { ...prev, newAmount: amt } : prev)
-                      load(page)
-                      alert(`已保存：实付 ${fmtNgn(amt)}`)
-                    } catch (e: any) { alert(e.message) }
-                    finally { setSavingNewAmount(false) }
-                  }}
-                >
-                  {savingNewAmount ? '保存中…' : '保存'}
-                </button>
+                {/* Red button only for active orders */}
+                {(verifyData.status === 'pending' || verifyData.status === 'processing') && (
+                  <button
+                    className="act-btn danger"
+                    style={{ marginLeft: 8, whiteSpace: 'nowrap' }}
+                    disabled={savingNewAmount}
+                    onClick={async () => {
+                      const amt = parseFloat(editingNewAmount)
+                      if (isNaN(amt) || amt <= 0) { alert('请输入有效金额'); return }
+                      setSavingNewAmount(true)
+                      try {
+                        await client.put('/tuka/order/audit', { id: verifyData.id, status: verifyData.status, verifyRemark: verifyData.verifyRemark || '', newAmount: amt, amountUpdateOnly: true })
+                        setVerifyData((prev: any) => prev ? { ...prev, newAmount: amt } : prev)
+                        load(page)
+                      } catch (e: any) { alert(e.message) }
+                      finally { setSavingNewAmount(false) }
+                    }}>
+                    {savingNewAmount ? '保存中…' : '变更结算金额'}
+                  </button>
+                )}
               </div>
-              {/* Show what was actually paid if different from original */}
               {verifyData.newAmount && verifyData.newAmount !== verifyData.ngnAmount && (
                 <div className="form-row" style={{ marginTop: -8 }}>
                   <label className="form-label" />
@@ -571,7 +546,7 @@ export default function OrdersScreen({
                 </div>
               )}
 
-              {/* 卡片代码 — show all codes */}
+              {/* 卡片代码 */}
               {verifyData.cardCode && (
                 <div className="form-row align-top">
                   <label className="form-label">卡片代码：</label>
@@ -583,23 +558,114 @@ export default function OrdersScreen({
                 </div>
               )}
 
-              {/* 备注信息 */}
+              {/* 备注信息 — editable for active, readonly for paid */}
               <div className="form-row align-top">
                 <label className="form-label">备注信息：</label>
-                <textarea className="form-textarea" readOnly value={verifyData.verifyRemark || ''} rows={3} />
-              </div>
-
-              {/* 核销凭证 */}
-              <div className="form-row align-top">
-                <label className="form-label">核销凭证：</label>
-                {verifyData.verifyImage ? (
-                  <Img src={resolveUrl(verifyData.verifyImage)} className="verify-thumb"
-                    onClick={() => setLightbox(resolveUrl(verifyData.verifyImage))} alt="凭证"
-                    style={{ width: 80, height: 80 }} />
+                {(verifyData.status === 'pending' || verifyData.status === 'processing') ? (
+                  <textarea className="form-textarea" rows={3} style={{ flex: 1 }}
+                    placeholder="备注（如：bad card / used card）"
+                    value={auditRemark}
+                    onChange={e => setAuditRemark(e.target.value)} />
                 ) : (
-                  <div className="verify-thumb-empty">暂无凭证</div>
+                  <textarea className="form-textarea" readOnly rows={3} style={{ flex: 1 }}
+                    value={verifyData.verifyRemark || ''} />
                 )}
               </div>
+
+              {/* 核销凭证 — upload for active, readonly image for paid */}
+              <div className="form-row align-top">
+                <label className="form-label">核销凭证：</label>
+                {(verifyData.status === 'pending' || verifyData.status === 'processing') ? (
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                    <label style={{ width: 120, height: 90, border: '1px dashed #d9d9d9', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fafafa', position: 'relative' }}>
+                      {auditImgFile ? (
+                        <>
+                          <img src={URL.createObjectURL(auditImgFile)} style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 6 }} alt="" />
+                          <button style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onClick={e => { e.preventDefault(); setAuditImgFile(null) }}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 24, color: '#1677ff' }}>📤</span>
+                          <span style={{ fontSize: 11, color: '#999', marginTop: 4, textAlign: 'center' }}>上传凭证<br/>支持拖拽</span>
+                        </>
+                      )}
+                      <input type="file" accept="image/*" style={{ display: 'none' }}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) setAuditImgFile(f); e.target.value = '' }} />
+                    </label>
+                    <button
+                      style={{ padding: '6px 14px', border: '1px solid #d9d9d9', borderRadius: 4, background: '#fff', color: '#333', fontSize: 13, cursor: 'pointer' }}
+                      onClick={async () => {
+                        try {
+                          const items = await navigator.clipboard.read()
+                          for (const item of items) {
+                            const imgType = item.types.find(t => t.startsWith('image/'))
+                            if (imgType) { const blob = await item.getType(imgType); setAuditImgFile(new File([blob], 'pasted.png', { type: imgType })); return }
+                          }
+                          alert('剪贴板中没有图片')
+                        } catch { alert('请先复制图片，再点击此按钮') }
+                      }}>
+                      点击粘贴图片
+                    </button>
+                  </div>
+                ) : (
+                  verifyData.verifyImage
+                    ? <Img src={resolveUrl(verifyData.verifyImage)} className="verify-thumb" onClick={() => setLightbox(resolveUrl(verifyData.verifyImage))} alt="凭证" style={{ width: 80, height: 80 }} />
+                    : <span className="no-img">暂无凭证</span>
+                )}
+              </div>
+
+              {/* 核销完成 / 核销失败 — ONLY for pending/processing. Paid orders are fully locked. */}
+              {canVerify && (verifyData.status === 'pending' || verifyData.status === 'processing') && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                  <button className="act-btn primary" style={{ padding: '9px 32px', fontSize: 14, minWidth: 120 }}
+                    disabled={submitting}
+                    onClick={async () => {
+                      if (!confirm('确认核销完成？')) return
+                      setSubmitting(true)
+                      try {
+                        let imageUrl = ''
+                        if (auditImgFile) {
+                          const fd = new FormData(); fd.append('file', auditImgFile)
+                          const res = await client.post('/common/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+                          imageUrl = res.data.url || ''
+                        }
+                        const amt = parseFloat(editingNewAmount)
+                        const payload: any = { id: verifyData.id, status: 'paid', verifyRemark: auditRemark, verifyImage: imageUrl }
+                        if (!isNaN(amt) && amt > 0 && amt !== verifyData.ngnAmount) payload.newAmount = amt
+                        await client.put('/tuka/order/audit', payload)
+                        playSuccess()
+                        setVerifyData(null); setAuditRemark(''); setAuditImgFile(null)
+                        load(page)
+                        client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } }).then(r => { onPendingCountChange?.(r.data.total || 0) })
+                      } catch (e: any) { alert(e.message) }
+                      finally { setSubmitting(false) }
+                    }}>
+                    {submitting ? '提交中…' : '核销完成'}
+                  </button>
+                  <button className="act-btn danger" style={{ padding: '9px 32px', fontSize: 14, minWidth: 120 }}
+                    disabled={submitting}
+                    onClick={async () => {
+                      if (!confirm('确认标记为核销失败？')) return
+                      setSubmitting(true)
+                      try {
+                        let imageUrl = ''
+                        if (auditImgFile) {
+                          const fd = new FormData(); fd.append('file', auditImgFile)
+                          const res = await client.post('/common/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+                          imageUrl = res.data.url || ''
+                        }
+                        await client.put('/tuka/order/audit', { id: verifyData.id, status: 'rejected', verifyRemark: auditRemark, verifyImage: imageUrl })
+                        setVerifyData(null); setAuditRemark(''); setAuditImgFile(null)
+                        load(page)
+                        client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } }).then(r => { onPendingCountChange?.(r.data.total || 0) })
+                      } catch (e: any) { alert(e.message) }
+                      finally { setSubmitting(false) }
+                    }}>
+                    {submitting ? '提交中…' : '核销失败'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -648,17 +714,16 @@ export default function OrdersScreen({
                 <input className="form-input short" readOnly value={cardData.purchaseRate ?? ''} />
               </div>
 
-              {/* 核销代码 — split by newline for multiple codes */}
-              <div className="form-row align-top">
+              {/* 核销代码 — full width input matching screenshot */}
+              <div className="form-row">
                 <label className="form-label">核销代码：</label>
-                <div className="codes-list">
-                  {cardData.cardCode
-                    ? cardData.cardCode.split('\n').filter((c: string) => c.trim()).map((code: string, i: number) => (
-                        <CodeRow key={i} index={i + 1} code={code.trim()} />
-                      ))
-                    : <span className="no-img">暂无代码</span>
-                  }
-                </div>
+                <input
+                  className="form-input"
+                  readOnly
+                  value={cardData.cardCode ? cardData.cardCode.split('\n').filter((c: string) => c.trim()).join(' / ') : ''}
+                  placeholder="—"
+                  style={{ fontFamily: 'monospace', letterSpacing: 1 }}
+                />
               </div>
 
               {/* 到期时间 */}
@@ -706,153 +771,6 @@ export default function OrdersScreen({
                   <span className="no-img">暂无收据</span>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Audit modal */}
-      {auditRow && (
-        <div className="modal-mask" onClick={() => { setAuditRow(null); setAuditImgFile(null); setAuditImage(''); setAdjustedAmount('') }}>
-          <div className="modal-box small" onClick={e => e.stopPropagation()}>
-            <div className="modal-head">
-              <span>{auditResult === 'paid' ? '核销完成' : '标记失败'}</span>
-              <button onClick={() => { setAuditRow(null); setAuditImgFile(null); setAuditImage(''); setAdjustedAmount('') }}>✕</button>
-            </div>
-            <div className="modal-body">
-              <DR label="订单编号" value={auditRow.orderNo} />
-              <DR label="用户ID"   value={String(auditRow.userId)} />
-              <DR label="卡种"     value={auditRow.categoryName} />
-              <DR label="面值"     value={`${currSym(auditRow.cardCurrency)}${auditRow.cardAmount}`} />
-              <DR label="结算金额" value={fmtNgn(auditRow.ngnAmount)} />
-
-              {/* Direct adjusted settlement amount — staff enters exact ₦ to fund user */}
-              <div className="form-row" style={{ marginBottom: 8 }}>
-                <label className="form-label" style={{ color: '#f59e0b', fontWeight: 700 }}>实付金额</label>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, color: '#666', flexShrink: 0 }}>₦</span>
-                    <input
-                      className="form-input"
-                      type="number"
-                      min={0}
-                      placeholder={`默认 ${fmtNgn(auditRow.ngnAmount)}（留空表示全额）`}
-                      value={adjustedAmount}
-                      onChange={e => setAdjustedAmount(e.target.value)}
-                      style={{ flex: 1, borderColor: adjustedAmount ? '#f59e0b' : undefined }}
-                    />
-                  </div>
-                  {adjustedAmount && !isNaN(Number(adjustedAmount)) && Number(adjustedAmount) > 0 && (
-                    <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 4 }}>
-                      将向用户结算 {fmtNgn(Number(adjustedAmount))}（原始 {fmtNgn(auditRow.ngnAmount)}）
-                    </div>
-                  )}
-                  {!adjustedAmount && (
-                    <div style={{ fontSize: 11, color: '#bbb', marginTop: 3 }}>
-                      留空则按全额 {fmtNgn(auditRow.ngnAmount)} 结算
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Show card codes if available */}
-              {auditRow.cardCode && auditRow.cardCode.trim() && (
-                <div className="audit-codes-section">
-                  <div className="audit-codes-title">卡片代码 ({auditRow.cardCode.split('\n').filter((c: string) => c.trim()).length} 张)</div>
-                  {auditRow.cardCode.split('\n').filter((c: string) => c.trim()).map((code: string, i: number) => (
-                    <div key={i} className="audit-code-row">
-                      <span className="audit-code-num">{i + 1}</span>
-                      <span className="audit-code-val">{code.trim()}</span>
-                      <button className="copy-btn" style={{ fontSize: 11, padding: '2px 8px' }}
-                        onClick={() => navigator.clipboard.writeText(code.trim())}>复制</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Show card images if this is an image-type order */}
-              {auditRow.cardImage && auditRow.cardImage.trim() && (
-                <div className="audit-codes-section">
-                  <div className="audit-codes-title">卡片图片 ({auditRow.cardImage.split(',').filter((u: string) => u.trim()).length} 张)</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
-                    {auditRow.cardImage.split(',').filter((u: string) => u.trim()).map((url: string, i: number) => (
-                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                        <Img
-                          src={resolveUrl(url.trim())}
-                          className="card-thumb"
-                          alt={`卡片图片 ${i + 1}`}
-                          onClick={() => setLightbox(resolveUrl(url.trim()))}
-                          style={{ width: 120, height: 120, cursor: 'pointer', borderRadius: 6, border: '1px solid #e8e8e8' }}
-                        />
-                        <button
-                          onClick={() => copyImg(resolveUrl(url.trim()))}
-                          style={{ fontSize: 11, color: '#1677ff', background: 'none', border: '1px solid #1677ff', borderRadius: 4, padding: '1px 8px', cursor: 'pointer' }}>
-                          复制图片
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Audit result radio */}
-              <div className="audit-radios">
-                <label className={'audit-opt' + (auditResult === 'paid' ? ' sel' : '')}
-                  onClick={() => setAuditResult('paid')}>✓ 核销完成</label>
-                <label className={'audit-opt danger' + (auditResult === 'rejected' ? ' sel' : '')}
-                  onClick={() => setAuditResult('rejected')}>✕ 标记失败</label>
-              </div>
-
-              {/* Remark */}
-              <textarea className="audit-remark" placeholder="备注（如：bad card / used card）" rows={2}
-                value={auditRemark} onChange={e => setAuditRemark(e.target.value)} />
-
-              {/* Verify image upload + clipboard paste */}
-              <div className="audit-img-section">
-                <div className="audit-img-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>凭证图片（可选）</span>
-                  <button
-                    style={{ fontSize: 11, color: '#1677ff', background: 'none', border: '1px solid #1677ff', borderRadius: 4, padding: '1px 8px', cursor: 'pointer' }}
-                    onClick={async () => {
-                      try {
-                        const items = await navigator.clipboard.read()
-                        for (const item of items) {
-                          const imgType = item.types.find(t => t.startsWith('image/'))
-                          if (imgType) {
-                            const blob = await item.getType(imgType)
-                            const file = new File([blob], 'pasted.png', { type: imgType })
-                            setAuditImgFile(file)
-                            break
-                          }
-                        }
-                      } catch {
-                        alert('请先复制图片，再点击此按钮粘贴')
-                      }
-                    }}>
-                    粘贴图片
-                  </button>
-                </div>
-                <label className="audit-img-upload">
-                  {auditImgFile ? (
-                    <div className="audit-img-preview-wrap">
-                      <img src={URL.createObjectURL(auditImgFile)} className="audit-img-preview" alt="" />
-                      <button className="audit-img-remove" onClick={e => { e.preventDefault(); setAuditImgFile(null) }}>✕</button>
-                    </div>
-                  ) : (
-                    <div className="audit-img-placeholder">
-                      <span className="audit-img-icon">[ IMG ]</span>
-                      <span>点击上传 / Ctrl+V 粘贴 / 使用粘贴按钮</span>
-                    </div>
-                  )}
-                  <input type="file" accept="image/*" style={{ display: 'none' }}
-                    onChange={e => { const f = e.target.files?.[0]; if (f) setAuditImgFile(f); e.target.value = '' }} />
-                </label>
-              </div>
-
-              <button className={'audit-submit' + (auditResult === 'rejected' ? ' danger' : '')}
-                onClick={submitAudit} disabled={submitting}>
-                {submitting ? '提交中…' : '确认提交'}
-              </button>
             </div>
           </div>
         </div>
