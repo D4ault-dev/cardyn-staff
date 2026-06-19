@@ -101,13 +101,13 @@ jobs:
           & scp @scpScript
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          # Execute the script on the server
+          # Execute the script on the server — strip any CRLF just in case
           $sshArgs = @(
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
             "-i", $keyPath,
             "$($env:SERVER_USER)@$($env:SERVER_HOST)",
-            "bash /tmp/gen_latest.sh && rm /tmp/gen_latest.sh"
+            "sed -i 's/\r//' /tmp/gen_latest.sh && bash /tmp/gen_latest.sh && rm /tmp/gen_latest.sh"
           )
           & ssh @sshArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
