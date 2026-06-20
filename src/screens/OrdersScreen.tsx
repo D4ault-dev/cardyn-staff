@@ -212,9 +212,9 @@ export default function OrdersScreen({
     return () => clearInterval(t)
   }, [page, pageSize, status, debouncedOrderNo, debouncedUserSearch, country, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
-  // Ctrl+V paste image into audit dialog when it's open
+  // Ctrl+V paste image into audit dialog OR 查看数据 modal when open
   useEffect(() => {
-    if (!auditRow) return
+    if (!auditRow && !verifyData) return
     function handlePaste(e: ClipboardEvent) {
       const items = e.clipboardData?.items
       if (!items) return
@@ -227,7 +227,7 @@ export default function OrdersScreen({
     }
     window.addEventListener('paste', handlePaste)
     return () => window.removeEventListener('paste', handlePaste)
-  }, [auditRow])
+  }, [auditRow, verifyData])
 
   const load = useCallback((p: number) => {
     setLoading(true)
@@ -601,7 +601,7 @@ export default function OrdersScreen({
                 </div>
               )}
 
-              {/* 卡片代码 */}
+              {/* 卡片代码 — Code type orders */}
               {verifyData.cardCode && (
                 <div className="form-row align-top">
                   <label className="form-label">卡片代码：</label>
@@ -610,6 +610,38 @@ export default function OrdersScreen({
                       <CodeRow key={i} index={i + 1} code={code.trim()} />
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* 卡片图片 — Physical type orders */}
+              {verifyData.cardImage && (
+                <div className="form-row align-top">
+                  <label className="form-label">卡片图片：</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                    {verifyData.cardImage.split(',').map((u: string, i: number) => u.trim() && (
+                      <img
+                        key={i}
+                        src={resolveUrl(u.trim())}
+                        style={{
+                          width: 64, height: 64, flexShrink: 0,
+                          objectFit: 'cover', borderRadius: 4,
+                          cursor: 'pointer', border: '1px solid #e8e8e8',
+                          display: 'block',
+                        }}
+                        onClick={() => setLightbox(resolveUrl(u.trim()))}
+                        alt={`card-${i + 1}`}
+                        title="点击查看大图"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Show message if neither code nor image */}
+              {!verifyData.cardCode && !verifyData.cardImage && (
+                <div className="form-row">
+                  <label className="form-label">卡片内容：</label>
+                  <span style={{ color: '#bbb', fontSize: 13 }}>暂无卡片代码或图片</span>
                 </div>
               )}
 
@@ -642,7 +674,7 @@ export default function OrdersScreen({
                       ) : (
                         <>
                           <span style={{ fontSize: 13, color: '#999' }}>点击上传</span>
-                          <span style={{ fontSize: 11, color: '#999', marginTop: 4, textAlign: 'center' }}>支持拖拽</span>
+                          <span style={{ fontSize: 11, color: '#bbb', marginTop: 4, textAlign: 'center' }}>或 Ctrl+V 粘贴</span>
                         </>
                       )}
                       <input type="file" accept="image/*" style={{ display: 'none' }}
@@ -658,7 +690,7 @@ export default function OrdersScreen({
                             if (imgType) { const blob = await item.getType(imgType); setAuditImgFile(new File([blob], 'pasted.png', { type: imgType })); return }
                           }
                           alert('剪贴板中没有图片')
-                        } catch { alert('请先复制图片，再点击此按钮') }
+                        } catch { alert('请先复制图片，再点击此按钮或使用 Ctrl+V') }
                       }}>
                       点击粘贴图片
                     </button>
