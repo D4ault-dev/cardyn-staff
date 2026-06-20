@@ -186,9 +186,11 @@ export default function OrdersScreen({
     return () => clearInterval(t)
   }, []) // eslint-disable-line
 
-  // Auto-show popup when new pending orders arrive
+  // Auto-show popup when pending/processing orders arrive — never auto-hide
   useEffect(() => {
     if (pendingRows.length > 0) setPendingPopup(true)
+    // NOTE: deliberately NOT closing when pendingRows.length === 0
+    // Staff must manually close with X — so they always see the current state
   }, [pendingRows.length])
 
   // Silent background auto-refresh every 15s — only when tab is visible
@@ -253,12 +255,22 @@ export default function OrdersScreen({
     setPage(1)
   }
 
-  // Load pending orders for popup — only unclaimed (pending) orders
+  // Load pending orders for popup — shows both unclaimed (pending) and in-progress (processing)
   function loadPendingPopup() {
     setPendingLoading(true)
     clearClientCacheByUrl('/tuka/order/list')
     client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 50 } })
-      .then(r => setPendingRows(r.data.rows || []))
+      .then(r => {
+        const pendingRows = r.data.rows || []
+        // Also fetch processing orders
+        client.get('/tuka/order/list', { params: { status: 'processing', pageSize: 50 } })
+          .then(r2 => {
+            const processingRows = r2.data.rows || []
+            // Merge: pending first, then processing
+            setPendingRows([...pendingRows, ...processingRows])
+          })
+          .catch(() => setPendingRows(pendingRows))
+      })
       .catch(() => {})
       .finally(() => setPendingLoading(false))
   }
@@ -838,7 +850,7 @@ export default function OrdersScreen({
             <div className="pp-list-header">
               <span className="pp-list-title">待受理订单</span>
               {pendingRows.length > 0 && (
-                <span className="pp-list-count">{pendingRows.length}</span>
+                <span className="pp-list-count">{pendingRows.filter(r => r.status === 'pending').length} 待接单 · {pendingRows.filter(r => r.status === 'processing').length} 处理中</span>
               )}
               <button className="pp-list-close" onClick={() => setPendingPopup(false)}>✕</button>
             </div>
@@ -847,8 +859,7 @@ export default function OrdersScreen({
             <div className="pp-list-body">
               {pendingRows.length === 0 ? (
                 <div className="pp-list-empty">暂无待受理订单</div>
-              ) : (
-                <table className="pp-list-table">
+              ) : (                <table className="pp-list-table">
                   <thead>
                     <tr>
                       <th>卡种</th>
@@ -863,7 +874,7 @@ export default function OrdersScreen({
                   </thead>
                   <tbody>
                     {pendingRows.map(r => (
-                      <tr key={r.id}>
+                      <tr key={r.id} style={{ background: r.status === 'processing' ? '#f0f9ff' : undefined }}>
                         <td>{r.categoryName}</td>
                         <td>{currSym(r.cardCurrency)}{r.cardAmount}</td>
                         <td>{fmtNgn(r.ngnAmount)}</td>
@@ -872,14 +883,37 @@ export default function OrdersScreen({
                         <td>{countryLabel(r.cardCurrency)}</td>
                         <td className="pp-list-time">{r.createTime?.slice(0, 16)}</td>
                         <td>
-                          {canVerify && (
-                            <button
-                              className={'pp-list-claim' + (claiming === r.id ? ' loading' : '')}
-                              disabled={!!claiming}
-                              onClick={() => claimOrder(r.id)}
-                            >
-                              {claiming === r.id ? '接单中…' : '接单'}
-                            </button>
+                          {r.status === 'processing' ? (
+                            // Already claimed — show who claimed it and a View button
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 11, color: '#1677ff', fontWeight: 600 }}>
+                                {(r as any).staffName || '处理中'}
+                              </span>
+                              <button
+                                className="pp-list-claim"
+                                style={{ background: '#fff', color: '#1677ff', border: '1px solid #1677ff' }}
+                                onClick={() => {
+                                  setPendingPopup(false)
+                                  setVerifyData(r)
+                                  setEditingNewAmount(String(r.newAmount ?? r.ngnAmount ?? ''))
+                                  setAuditRemark('')
+                                  setAuditImgFile(null)
+                                  setAdjustedAmount('')
+                                }}
+                              >
+                                查看
+                              </button>
+                            </div>
+                          ) : (
+                            canVerify && (
+                              <button
+                                className={'pp-list-claim' + (claiming === r.id ? ' loading' : '')}
+                                disabled={!!claiming}
+                                onClick={() => claimOrder(r.id)}
+                              >
+                                {claiming === r.id ? '接单中…' : '接单'}
+                              </button>
+                            )
                           )}
                         </td>
                       </tr>
