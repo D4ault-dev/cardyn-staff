@@ -100,6 +100,13 @@ export default function OrdersScreen({
 }) {
   const { user } = useAuth()
   const canVerify = canVerifyOrders(user?.roleType || '')
+  // A staff can edit an order only if they claimed it (staffId matches) or they're super admin
+  const canEditOrder = (order: Order | null) => {
+    if (!order) return false
+    if (isSuper(user?.roleType || '')) return true         // super admin can always edit
+    if (!order.staffId) return false                        // unclaimed order — no one can edit yet
+    return order.staffId === user?.userId                   // only the claimer can edit
+  }
 
   const [rows,         setRows]         = useState<Order[]>([])
   const [total,        setTotal]        = useState(0)
@@ -156,6 +163,12 @@ export default function OrdersScreen({
       .catch(() => {})
   }, [])
 
+  // Show pending popup on mount and keep it open whenever there are pending orders
+  useEffect(() => {
+    loadPendingPopup()
+    setPendingPopup(true)
+  }, []) // eslint-disable-line
+
   // Auto-open popup when a new order alert fires from global polling
   useEffect(() => {
     if (newOrderAlert) {
@@ -165,13 +178,18 @@ export default function OrdersScreen({
     }
   }, [newOrderAlert]) // eslint-disable-line
 
-  // Auto-refresh pending popup every 8s while it's open (reduced from 3s — main poller handles alerts)
+  // Auto-refresh pending popup every 8s — always running so staff see new orders immediately
   useEffect(() => {
-    if (!pendingPopup) return
-    loadPendingPopup()
-    const t = setInterval(loadPendingPopup, 8_000)
+    const t = setInterval(() => {
+      if (!document.hidden) loadPendingPopup()
+    }, 8_000)
     return () => clearInterval(t)
-  }, [pendingPopup]) // eslint-disable-line
+  }, []) // eslint-disable-line
+
+  // Auto-show popup when new pending orders arrive
+  useEffect(() => {
+    if (pendingRows.length > 0) setPendingPopup(true)
+  }, [pendingRows.length])
 
   // Silent background auto-refresh every 15s — only when tab is visible
   useEffect(() => {
@@ -472,7 +490,10 @@ export default function OrdersScreen({
       </div>
 
       {/* ── 查看数据 modal: title = '核销' for active, '核销数据' for paid/rejected ── */}
-      {verifyData && (
+      {verifyData && (() => {
+        const canEdit = canEditOrder(verifyData)
+        const isActive = verifyData.status === 'pending' || verifyData.status === 'processing'
+        return (
         <div className="modal-mask" onClick={() => { setVerifyData(null); setAuditRemark(''); setAuditImgFile(null) }}>
           <div className="modal-box wide" onClick={e => e.stopPropagation()}>
             <div className="modal-head">
@@ -531,13 +552,15 @@ export default function OrdersScreen({
                 <input
                   className="form-input"
                   type="number"
-                  readOnly={verifyData.status === 'paid' || verifyData.status === 'rejected'}
+                  readOnly={!canEdit || verifyData.status === 'paid' || verifyData.status === 'rejected'}
                   value={editingNewAmount}
                   onChange={e => setEditingNewAmount(e.target.value)}
-                  style={{ width: 120, background: (verifyData.status === 'paid' || verifyData.status === 'rejected') ? '#fafafa' : undefined, color: (verifyData.status === 'paid' || verifyData.status === 'rejected') ? '#888' : undefined }}
+                  style={{ width: 120,
+                    background: (!canEdit || verifyData.status === 'paid' || verifyData.status === 'rejected') ? '#fafafa' : undefined,
+                    color: (!canEdit || verifyData.status === 'paid' || verifyData.status === 'rejected') ? '#888' : undefined }}
                 />
-                {/* Red button only for active orders */}
-                {(verifyData.status === 'pending' || verifyData.status === 'processing') && (
+                {/* Red button only for active orders AND only if this staff claimed it */}
+                {isActive && canEdit && (
                   <button
                     className="act-btn danger"
                     style={{ marginLeft: 8, whiteSpace: 'nowrap' }}
@@ -578,10 +601,10 @@ export default function OrdersScreen({
                 </div>
               )}
 
-              {/* 备注信息 — editable for active, readonly for paid */}
+              {/* 备注信息 — editable only for active orders claimed by this staff */}
               <div className="form-row align-top">
                 <label className="form-label">备注信息：</label>
-                {(verifyData.status === 'pending' || verifyData.status === 'processing') ? (
+                {(isActive && canEdit) ? (
                   <textarea className="form-textarea" rows={3} style={{ flex: 1 }}
                     placeholder="备注（如：bad card / used card）"
                     value={auditRemark}
@@ -592,10 +615,10 @@ export default function OrdersScreen({
                 )}
               </div>
 
-              {/* 核销凭证 — upload for active, readonly image for paid */}
+              {/* 核销凭证 — upload only for active orders claimed by this staff */}
               <div className="form-row align-top">
                 <label className="form-label">核销凭证：</label>
-                {(verifyData.status === 'pending' || verifyData.status === 'processing') ? (
+                {(isActive && canEdit) ? (
                   <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
                     <label style={{ width: 120, height: 90, border: '1px dashed #d9d9d9', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fafafa', position: 'relative' }}>
                       {auditImgFile ? (
@@ -635,8 +658,8 @@ export default function OrdersScreen({
                 )}
               </div>
 
-              {/* 核销完成 / 核销失败 — ONLY for pending/processing. Paid orders are fully locked. */}
-              {canVerify && (verifyData.status === 'pending' || verifyData.status === 'processing') && (
+              {/* 核销完成 / 核销失败 — only for active orders claimed by THIS staff */}
+              {canVerify && isActive && canEdit && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
                   <button className="act-btn primary" style={{ padding: '9px 32px', fontSize: 14, minWidth: 120 }}
                     disabled={submitting}
@@ -687,9 +710,20 @@ export default function OrdersScreen({
                 </div>
               )}
             </div>
+              {/* Notice for staff viewing an order they didn't claim */}
+              {isActive && !canEdit && (
+                <div style={{ marginTop: 12, padding: '10px 14px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 18 }}>⚠️</span>
+                  <span style={{ fontSize: 13, color: '#d46b08' }}>
+                    This order is being processed by <strong>{(verifyData as any).staffName || 'another staff'}</strong>. You can view but not edit.
+                  </span>
+                </div>
+              )}
+
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── 卡片数据 modal (查看 button) — matches screenshot 2 ── */}
       {cardData && (
