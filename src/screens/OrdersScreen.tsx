@@ -470,13 +470,20 @@ export default function OrdersScreen({
                 </td>
                 <td>
                   <div className="action-btns">
-                    <button className="act-btn blue" onClick={() => { setVerifyData(r); setEditingNewAmount(String(r.newAmount ?? r.ngnAmount ?? '')); setAuditRemark(''); setAuditImgFile(null); setAdjustedAmount('') }}>查看数据</button>
+                    {/* 查看数据: show to claimer + super admin for active orders, everyone for completed */}
+                    {(r.status === 'paid' || r.status === 'rejected' || canEditOrder(r) || r.status === 'pending') && (
+                      <button className="act-btn blue" onClick={() => { setVerifyData(r); setEditingNewAmount(String(r.newAmount ?? r.ngnAmount ?? '')); setAuditRemark(''); setAuditImgFile(null); setAdjustedAmount('') }}>查看数据</button>
+                    )}
                     <button className="act-btn green" onClick={() => setCardData(r)}>查看</button>
                     {/* Status badge only — audit actions moved inside 查看数据 modal */}
                     {r.status === 'paid' && <span className="status-badge paid">核销完成</span>}
                     {r.status === 'rejected' && <span className="status-badge rejected" title={r.rejectReason || 'bad card'}>失败</span>}
                     {r.status === 'pending' && <span className="status-badge pending">待处理</span>}
-                    {r.status === 'processing' && <span className="status-badge processing">处理中</span>}
+                    {r.status === 'processing' && (
+                      <span className="status-badge processing" title={(r as any).staffName ? `处理人: ${(r as any).staffName}` : '处理中'}>
+                        {(r as any).staffName ? `${(r as any).staffName}处理中` : '处理中'}
+                      </span>
+                    )}
                   </div>
                 </td>
               </tr>
