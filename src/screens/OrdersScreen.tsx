@@ -255,19 +255,22 @@ export default function OrdersScreen({
     setPage(1)
   }
 
-  // Load pending orders for popup — shows both unclaimed (pending) and in-progress (processing)
+  // Load pending orders for popup:
+  // - All unclaimed (pending) orders — any staff can claim
+  // - Processing orders claimed by THIS staff — only they see their own
   function loadPendingPopup() {
     setPendingLoading(true)
     clearClientCacheByUrl('/tuka/order/list')
     client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 50 } })
       .then(r => {
         const pendingRows = r.data.rows || []
-        // Also fetch processing orders
-        client.get('/tuka/order/list', { params: { status: 'processing', pageSize: 50 } })
+        // Also fetch processing orders claimed by THIS staff only
+        client.get('/tuka/order/list', { params: { status: 'processing', pageSize: 50, staffId: user?.userId } })
           .then(r2 => {
-            const processingRows = r2.data.rows || []
-            // Merge: pending first, then processing
-            setPendingRows([...pendingRows, ...processingRows])
+            const myProcessing = (r2.data.rows || []).filter(
+              (o: any) => o.staffId === user?.userId
+            )
+            setPendingRows([...pendingRows, ...myProcessing])
           })
           .catch(() => setPendingRows(pendingRows))
       })
@@ -882,7 +885,11 @@ export default function OrdersScreen({
             <div className="pp-list-header">
               <span className="pp-list-title">待受理订单</span>
               {pendingRows.length > 0 && (
-                <span className="pp-list-count">{pendingRows.filter(r => r.status === 'pending').length} 待接单 · {pendingRows.filter(r => r.status === 'processing').length} 处理中</span>
+                <span className="pp-list-count">
+                  {pendingRows.filter(r => r.status === 'pending').length > 0 && `${pendingRows.filter(r => r.status === 'pending').length} 待接单`}
+                  {pendingRows.filter(r => r.status === 'pending').length > 0 && pendingRows.filter(r => r.status === 'processing').length > 0 && ' · '}
+                  {pendingRows.filter(r => r.status === 'processing').length > 0 && `${pendingRows.filter(r => r.status === 'processing').length} 我的处理中`}
+                </span>
               )}
               <button className="pp-list-close" onClick={() => setPendingPopup(false)}>✕</button>
             </div>
