@@ -9,6 +9,7 @@ import client from '../api/client'
 import DateRangePicker from '../components/DateRangePicker'
 import Img from '../components/Img'
 import { resolveUrl, fmtUid } from '../utils/resolveUrl'
+import { useDebounce } from '../hooks/useDebounce'
 import './OrdersScreen.css'
 import './WithdrawalsScreen.css'
 
@@ -63,6 +64,7 @@ export default function WithdrawalsScreen({
   const [firstLoad,  setFirstLoad]  = useState(true)
   const [status,     setStatus]     = useState('')  // default all
   const [userSearch, setUserSearch] = useState('')  // NEW: UID / phone / name
+  const debouncedUserSearch = useDebounce(userSearch, 400)
   const [startDate,  setStartDate]  = useState('')
   const [endDate,    setEndDate]    = useState('')
   const [startTime,  setStartTime]  = useState('')
@@ -121,7 +123,7 @@ export default function WithdrawalsScreen({
     const params = {
       pageNum: p, pageSize,
       status:    status    || undefined,
-      username:  userSearch || undefined,
+      username:  debouncedUserSearch || undefined,
       startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
       endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
     }
@@ -130,9 +132,9 @@ export default function WithdrawalsScreen({
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
       .finally(() => { setLoading(false); setFirstLoad(false) })
-  }, [pageSize, status, userSearch, startDate, endDate, startTime, endTime])
+  }, [pageSize, status, debouncedUserSearch, startDate, endDate, startTime, endTime])
 
-  useEffect(() => { load(1); setPage(1) }, [status, userSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
+  useEffect(() => { load(1); setPage(1) }, [status, debouncedUserSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   // Auto-jump to pending tab when a new withdrawal alert arrives
   useEffect(() => {
@@ -142,19 +144,20 @@ export default function WithdrawalsScreen({
     }
   }, [newWdAlert]) // eslint-disable-line
 
-  // Silent background auto-refresh every 8s with cache invalidation
+  // Silent background auto-refresh every 15s — skip when tab hidden
   useEffect(() => {
     const silentLoad = () => {
+      if (document.hidden) return
       invalidatePrefix('withdrawals:')
       getWithdrawals({ pageNum: page, pageSize, status: status || undefined,
-        username:  userSearch || undefined,
+        username:  debouncedUserSearch || undefined,
         startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
         endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
       }).then(r => { setRows(r.rows); setTotal(r.total) }).catch(() => {})
     }
-    const t = setInterval(silentLoad, 8_000)
+    const t = setInterval(silentLoad, 15_000)
     return () => clearInterval(t)
-  }, [page, pageSize, status, userSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
+  }, [page, pageSize, status, debouncedUserSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   async function submitPay() {
     if (!payModal) return

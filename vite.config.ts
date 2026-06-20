@@ -51,7 +51,15 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id: string) => {
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('react-router')) return 'vendor'
+          // Core React — always loaded first
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('react-router')) return 'vendor'
+          // Each screen in its own chunk — only downloaded when navigated to
+          if (id.includes('src/screens/ChatScreen'))        return 'screen-chat'
+          if (id.includes('src/screens/OrdersScreen'))      return 'screen-orders'
+          if (id.includes('src/screens/WithdrawalsScreen')) return 'screen-withdrawals'
+          if (id.includes('src/screens/UsersScreen'))       return 'screen-users'
+          // Axios and other heavy libs
+          if (id.includes('node_modules/axios'))            return 'axios'
         }
       }
     }

@@ -9,6 +9,7 @@ import { playSuccess, playError } from '../utils/sound'
 import DateRangePicker from '../components/DateRangePicker'
 import Img from '../components/Img'
 import { resolveUrl, fmtUid } from '../utils/resolveUrl'
+import { useDebounce } from '../hooks/useDebounce'
 import './OrdersScreen.css'
 
 /** Copy an image URL to the system clipboard as an image (paste into WeChat/WhatsApp etc.) */
@@ -111,6 +112,10 @@ export default function OrdersScreen({
   const [status,       setStatus]       = useState('')  // default all
   const [orderNo,      setOrderNo]      = useState('')
   const [userSearch,   setUserSearch]   = useState('')  // NEW: UID / phone / email / name
+
+  // Debounced versions — only fire API call after user stops typing for 400ms
+  const debouncedOrderNo    = useDebounce(orderNo,    400)
+  const debouncedUserSearch = useDebounce(userSearch, 400)
   const [startDate,    setStartDate]    = useState('')  // date only: yyyy-MM-dd
   const [endDate,      setEndDate]      = useState('')
   const [startTime,    setStartTime]    = useState('')  // HH:mm
@@ -160,32 +165,32 @@ export default function OrdersScreen({
     }
   }, [newOrderAlert]) // eslint-disable-line
 
-  // Auto-refresh pending popup every 5s while it's open
+  // Auto-refresh pending popup every 8s while it's open (reduced from 3s — main poller handles alerts)
   useEffect(() => {
     if (!pendingPopup) return
     loadPendingPopup()
-    const t = setInterval(loadPendingPopup, 3_000)
+    const t = setInterval(loadPendingPopup, 8_000)
     return () => clearInterval(t)
   }, [pendingPopup]) // eslint-disable-line
 
-  // Silent background auto-refresh every 8s — invalidates SWR cache so data is always fresh
+  // Silent background auto-refresh every 15s — only when tab is visible
   useEffect(() => {
     const silentLoad = () => {
-      // Invalidate SWR cache so next fetch goes to network
+      if (document.hidden) return  // don't waste requests when tab is not visible
       invalidatePrefix('orders:')
       getOrders({
         pageNum: page, pageSize,
-        status:      status      || undefined,
-        orderNo:     orderNo     || undefined,
-        userSearch:  userSearch  || undefined,
-        country:     country     || undefined,
+        status:      status                || undefined,
+        orderNo:     debouncedOrderNo      || undefined,
+        userSearch:  debouncedUserSearch   || undefined,
+        country:     country               || undefined,
         startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
         endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
       }).then(r => { setRows(r.rows); setTotal(r.total) }).catch(() => {})
     }
-    const t = setInterval(silentLoad, 8_000)
+    const t = setInterval(silentLoad, 15_000)  // reduced from 8s to 15s
     return () => clearInterval(t)
-  }, [page, pageSize, status, orderNo, userSearch, country, startDate, endDate, startTime, endTime]) // eslint-disable-line
+  }, [page, pageSize, status, debouncedOrderNo, debouncedUserSearch, country, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   // Ctrl+V paste image into audit dialog when it's open
   useEffect(() => {
@@ -208,10 +213,10 @@ export default function OrdersScreen({
     setLoading(true)
     getOrders({
       pageNum: p, pageSize,
-      status:      status      || undefined,
-      orderNo:     orderNo     || undefined,
-      userSearch:  userSearch  || undefined,
-      country:     country     || undefined,
+      status:      status                || undefined,
+      orderNo:     debouncedOrderNo      || undefined,
+      userSearch:  debouncedUserSearch   || undefined,
+      country:     country               || undefined,
       startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
       endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
     }, {
@@ -220,9 +225,9 @@ export default function OrdersScreen({
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
       .finally(() => { setLoading(false); setFirstLoad(false) })
-  }, [pageSize, status, orderNo, userSearch, country, startDate, endDate, startTime, endTime])
+  }, [pageSize, status, debouncedOrderNo, debouncedUserSearch, country, startDate, endDate, startTime, endTime])
 
-  useEffect(() => { load(1); setPage(1) }, [status, country, orderNo, userSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
+  useEffect(() => { load(1); setPage(1) }, [status, country, debouncedOrderNo, debouncedUserSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   function reset() {
     setStatus(''); setCountry(''); setOrderNo(''); setUserSearch('')
@@ -241,6 +246,7 @@ export default function OrdersScreen({
   }
 
   // Claim/accept a pending order (mark as processing)
+  // Uses atomic backend claim — if another staff got it first, shows a clear message.
   async function claimOrder(orderId: number) {
     setClaiming(orderId)
     try {
@@ -250,8 +256,22 @@ export default function OrdersScreen({
       // Refresh global pending count
       client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
         .then(r => { onPendingCountChange?.(r.data.total || 0) })
-    } catch (e: any) { alert(e.message) }
-    finally { setClaiming(null) }
+    } catch (e: any) {
+      const msg: string = e.message || ''
+      if (msg.includes('already claimed') || msg.includes('409')) {
+        // Another staff grabbed it — refresh the list silently so it shows as processing
+        loadPendingPopup()
+        load(page)
+        // Show a non-blocking notification instead of a blocking alert
+        const toast = document.createElement('div')
+        toast.textContent = msg.replace('409: ', '') || 'Order already claimed by another staff'
+        toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#ff4d4f;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2)'
+        document.body.appendChild(toast)
+        setTimeout(() => toast.remove(), 3000)
+      } else {
+        alert(msg)
+      }
+    } finally { setClaiming(null) }
   }
 
   async function submitAudit() {

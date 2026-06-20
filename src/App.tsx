@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, lazy, Suspense } from 'react'
 import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { useHeartbeat } from './hooks/useHeartbeat'
@@ -10,10 +10,13 @@ import UpdateBanner from './components/UpdateBanner'
 import type { ToastItem } from './components/ChatToast'
 import { playNewChat, playNewOrder, playNewWithdrawal } from './utils/sound'
 import LoginScreen from './screens/LoginScreen'
-import ChatScreen from './screens/ChatScreen'
-import OrdersScreen from './screens/OrdersScreen'
-import WithdrawalsScreen from './screens/WithdrawalsScreen'
-import UsersScreen from './screens/UsersScreen'
+
+// Lazy-load heavy screens — only parsed + executed when first navigated to
+const ChatScreen        = lazy(() => import('./screens/ChatScreen'))
+const OrdersScreen      = lazy(() => import('./screens/OrdersScreen'))
+const WithdrawalsScreen = lazy(() => import('./screens/WithdrawalsScreen'))
+const UsersScreen       = lazy(() => import('./screens/UsersScreen'))
+
 import './App.css'
 
 function Shell() {
@@ -133,7 +136,8 @@ function Shell() {
         {/* Online staff bar */}
         <OnlineBar />
 
-        {/* Screen content */}
+        {/* Screen content — Suspense handles lazy-loaded screens */}
+        <Suspense fallback={<div className="app-loading"><div className="spinner" /></div>}>
         <Routes>
           <Route path="/"            element={<Navigate to="/orders" replace />} />
           <Route path="/chat"        element={
@@ -161,6 +165,7 @@ function Shell() {
           } />
           <Route path="/users"       element={<UsersScreen />} />
         </Routes>
+        </Suspense>
       </div>
 
       {/* Toast notifications */}

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { ROLES, isSuper } from '../utils/roles'
 import { fmtUid } from '../utils/resolveUrl'
 import DateRangePicker from '../components/DateRangePicker'
+import { useDebounce } from '../hooks/useDebounce'
 import './OrdersScreen.css'
 import './UsersScreen.css'
 
@@ -25,6 +26,7 @@ export default function UsersScreen() {
   const [loading, setLoading] = useState(false)
   const [firstLoad, setFirstLoad] = useState(true)
   const [search,  setSearch]  = useState('')  // UID / phone / email / name
+  const debouncedSearch = useDebounce(search, 400)
   const [detail,  setDetail]  = useState<AppUser | null>(null)
   const [startDate, setStartDate] = useState('')
   const [endDate,   setEndDate]   = useState('')
@@ -36,7 +38,7 @@ export default function UsersScreen() {
     setLoading(true)
     const params = {
       pageNum: p, pageSize,
-      userSearch: search    || undefined,
+      userSearch: debouncedSearch || undefined,
       startTime: startDate ? startDate + ' ' + (startTime || '00:00') + ':00' : undefined,
       endTime:   endDate   ? endDate   + ' ' + (endTime   || '23:59') + ':59' : undefined,
     }
@@ -45,9 +47,9 @@ export default function UsersScreen() {
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
       .finally(() => { setLoading(false); setFirstLoad(false) })
-  }, [pageSize, search, startDate, endDate, startTime, endTime])
+  }, [pageSize, debouncedSearch, startDate, endDate, startTime, endTime])
 
-  useEffect(() => { load(1); setPage(1) }, [search, startDate, endDate, startTime, endTime]) // eslint-disable-line
+  useEffect(() => { load(1); setPage(1) }, [debouncedSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
 
   const totalPages = Math.ceil(total / pageSize)
   function goPage(p: number) { if (p < 1 || p > totalPages) return; setPage(p); load(p) }
