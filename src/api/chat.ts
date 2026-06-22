@@ -79,3 +79,7 @@ export const getUserProfile = (sessionId: number) =>
 
 export const transferSession = (sessionId: number, toUsername: string) =>
   client.post(`/tuka/chat/admin/transfer/${sessionId}`, { toUsername })
+
+export const initiateChat = (userId: number): Promise<{ sessionId: number; reused: boolean }> =>
+  client.post('/tuka/chat/admin/initiate', { userId })
+    .then(r => r.data.data as { sessionId: number; reused: boolean })

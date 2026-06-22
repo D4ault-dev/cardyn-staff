@@ -271,7 +271,7 @@ export default function WithdrawalsScreen({
             <tr>
               <th>id</th><th>用户</th><th>提现单号</th><th>银行</th>
               <th>账户名</th><th>账号</th><th>金额</th><th>手续费</th>
-              <th>状态</th><th>收据</th><th>创建时间</th><th>操作</th>
+              <th>状态</th><th>处理人</th><th>收据</th><th>创建时间</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -286,7 +286,7 @@ export default function WithdrawalsScreen({
                 ))}
               </>
             )}
-            {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={12} className="table-empty">暂无数据</td></tr>}
+            {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={13} className="table-empty">暂无数据</td></tr>}
             {!(loading && firstLoad) && rows.map(r => {
               const st = STATUS_MAP[r.status] || { label: r.status, color: '#999' }
               return (
@@ -300,6 +300,9 @@ export default function WithdrawalsScreen({
                   <td className="amount-red">{fmtNgn(r.amount)}</td>
                   <td>{fmtNgn(r.fee)}</td>
                   <td><span style={{ color: st.color, fontWeight: 600 }}>● {st.label}</span></td>
+                  <td style={{ fontSize: 11, color: (r as any).staffName ? '#1677ff' : '#bbb' }}>
+                    {(r as any).staffName || '—'}
+                  </td>
                   <td>
                     {r.receiptImage
                       ? <Img src={resolveUrl(r.receiptImage)} className="receipt-thumb" alt="收据"

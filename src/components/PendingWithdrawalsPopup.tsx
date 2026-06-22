@@ -33,21 +33,27 @@ export default function PendingWithdrawalsPopup({
   const [rows, setRows] = useState<Withdrawal[]>([])
   const [loading, setLoading] = useState(false)
   const [claiming, setClaiming] = useState<number | null>(null)
+  // Track whether staff manually closed — prevents auto-reopen after claim
+  const suppressAutoOpen = React.useRef(false)
 
-  const load = useCallback(() => {
+  const load = useCallback((forceShow = false) => {
     if (!canPay) return
     clearClientCacheByUrl('/tuka/withdrawal/list')
-    // Fetch unclaimed pending
     client.get('/tuka/withdrawal/list', { params: { status: 'pending', pageSize: 50 } })
       .then(r => {
         const pending = (r.data.rows || []).filter((w: any) => !w.staffId || w.staffId === 0)
-        // Fetch my claimed ones (pending with my staffId)
         const myClaimed = (r.data.rows || []).filter(
           (w: any) => w.staffId && Number(w.staffId) === Number(user?.userId)
         )
         const combined = [...pending, ...myClaimed]
         setRows(combined)
-        if (combined.length > 0) setVisible(true)
+        // Only auto-open if: forceShow is true OR new unclaimed items arrived AND not suppressed
+        if (forceShow) {
+          setVisible(true)
+          suppressAutoOpen.current = false
+        } else if (!suppressAutoOpen.current && pending.length > 0) {
+          setVisible(true)
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -60,14 +66,17 @@ export default function PendingWithdrawalsPopup({
   }, [load])
 
   useEffect(() => {
-    if (newWdAlert) { load(); setVisible(true); onAlertDismissed?.() }
+    if (newWdAlert) { load(true); setVisible(true); onAlertDismissed?.() }
   }, [newWdAlert]) // eslint-disable-line
 
   async function claimWithdrawal(wdId: number) {
     setClaiming(wdId)
     try {
       await client.put('/tuka/withdrawal/claim', { id: wdId })
-      load()
+      // Close popup immediately — don't reopen just because we now own a row
+      suppressAutoOpen.current = true
+      setVisible(false)
+      load()  // refresh data silently — suppressed from auto-opening
       onWithdrawalClaimed?.()
     } catch (e: any) {
       const msg = e.message || ''
@@ -94,7 +103,7 @@ export default function PendingWithdrawalsPopup({
         <button
           className="pp-global-fab"
           style={{ bottom: 70, background: '#fa8c16' }}
-          onClick={() => { load(); setVisible(true) }}
+          onClick={() => { suppressAutoOpen.current = false; load(true) }}
         >
           待处理提现
           {(globalPendingCount > 0 || unclaimedCount > 0) && (
@@ -104,7 +113,10 @@ export default function PendingWithdrawalsPopup({
       )}
 
       {visible && (
-        <div className="pp-global-overlay" onClick={() => setVisible(false)}>
+        <div className="pp-global-overlay" onClick={() => {
+          suppressAutoOpen.current = true
+          setVisible(false)
+        }}>
           <div className="pp-global-popup" onClick={e => e.stopPropagation()}>
             <div className="pp-global-header">
               <span className="pp-global-title">待处理提现</span>
@@ -116,7 +128,10 @@ export default function PendingWithdrawalsPopup({
                     {myClaimedCount > 0 && `${myClaimedCount} 我的处理中`}
                   </span>
                 )}
-                <button className="pp-global-close" onClick={() => setVisible(false)}>✕</button>
+                <button className="pp-global-close" onClick={() => {
+                  suppressAutoOpen.current = true
+                  setVisible(false)
+                }}>✕</button>
               </div>
             </div>
             <div className="pp-global-body">

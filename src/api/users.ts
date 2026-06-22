@@ -30,3 +30,13 @@ export const setUserStatus = (userId: number, status: 0 | 1) => {
   clearClientCacheByUrl('/tuka/user/list')
   return client.put('/tuka/user/status', { userId, status })
 }
+
+export const getUserOrders = (userId: number, pageNum = 1, pageSize = 15) =>
+  client
+    .get('/tuka/order/list', { params: { userId: String(userId), pageNum, pageSize } })
+    .then(r => ({ rows: r.data.rows || [], total: r.data.total || 0 }))
+
+export const getUserTransactions = (userId: number, pageNum = 1, pageSize = 15) =>
+  client
+    .get('/tuka/amountDetail/list', { params: { userId: String(userId), pageNum, pageSize } })
+    .then(r => ({ rows: r.data.rows || [], total: r.data.total || 0 }))

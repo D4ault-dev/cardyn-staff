@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import {
   getSessions, getMessages, pollSession, sendReply,
-  claimSession, closeSession, getUserOrders, getUserProfile, transferSession,
+  claimSession, closeSession, getUserOrders, getUserProfile, transferSession, initiateChat,
 } from '../api/chat'
 import type { ChatSession, ChatMessage, UserOrder } from '../types'
 import { useAuth } from '../context/AuthContext'
@@ -75,6 +75,11 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
     username: string; nickName: string; isOnline: boolean; activeSessions: number
   }>>([])
   const [loadingStaff, setLoadingStaff] = useState(false)
+
+  // Initiate chat with a user by ID
+  const [initiateUserId,  setInitiateUserId]  = useState('')
+  const [initiating,      setInitiating]      = useState(false)
+  const [initiateError,   setInitiateError]   = useState<string | null>(null)
 
   const lastIdRef = useRef(0)
   const pollRef   = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -232,6 +237,29 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
     if (target) { openSession(target); onAutoOpenDone?.() }
   }, [autoOpenSessionId, sessions])
 
+  async function handleInitiateById(userIdStr: string) {
+    const uid = parseInt(userIdStr, 10)
+    if (!uid || isNaN(uid)) { setInitiateError('Enter a valid user ID'); return }
+    setInitiating(true); setInitiateError(null)
+    try {
+      const { sessionId } = await initiateChat(uid)
+      setSearch('')
+      setInitiateUserId('')
+      const rows = await getSessions('')
+      setSessions(rows)
+      setFilter('')
+      onUnreadChange(rows.filter(r => r.status !== 'closed').reduce((s, r) => s + (r.unreadCount || 0), 0))
+      const target = rows.find(r => r.id === sessionId)
+      if (target) openSession(target)
+    } catch (e: any) {
+      setInitiateError(e?.response?.data?.msg || e.message || 'Failed to start chat')
+    } finally { setInitiating(false) }
+  }
+
+  async function handleInitiate() {
+    await handleInitiateById(initiateUserId)
+  }
+
   async function handleSend() {
     if (!input.trim() || !active || sending) return
     const text = input.trim(); setInput(''); setSending(true)
@@ -375,12 +403,43 @@ export default function ChatScreen({ onUnreadChange, autoOpenSessionId, onAutoOp
     <div className="chat-root">
       {/* Left: session list */}
       <div className="chat-sessions">
-        {/* Search */}
+        {/* Unified search / initiate bar */}
         <div className="sessions-search">
-          <input className="search-input" placeholder="搜索会话" value={search}
-            onChange={e => setSearch(e.target.value)} />
-          <button className="search-btn" onClick={() => {}}>搜索</button>
+          <input
+            className="search-input"
+            placeholder="Search or enter User ID to start chat"
+            value={search}
+            onChange={e => {
+              setSearch(e.target.value)
+              setInitiateError(null)
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                // If input is a pure number treat it as a user ID initiation
+                const trimmed = e.currentTarget.value.trim()
+                if (/^\d+$/.test(trimmed)) {
+                  setInitiateUserId(trimmed)
+                  handleInitiateById(trimmed)
+                }
+              }
+            }}
+          />
+          <button
+            className="search-btn"
+            title="Start chat with User ID"
+            disabled={initiating || !/^\d+$/.test(search.trim())}
+            onClick={() => {
+              const trimmed = search.trim()
+              if (/^\d+$/.test(trimmed)) {
+                setInitiateUserId(trimmed)
+                handleInitiateById(trimmed)
+              }
+            }}
+          >
+            {initiating ? '...' : 'Chat'}
+          </button>
         </div>
+        {initiateError && <div className="initiate-error" style={{ padding: '0 10px 6px', fontSize: 12, color: '#ff4d4f' }}>{initiateError}</div>}
 
         {/* Filter tabs */}
         <div className="sessions-tabs">
