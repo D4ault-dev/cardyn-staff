@@ -221,62 +221,8 @@ export default function OrdersScreen({
     setPage(1)
   }
 
-  // Load pending orders for popup:
-  // - All unclaimed (pending) orders — any staff with verify role can claim
-  // - Processing orders claimed by THIS staff — only they see their own
-  function loadPendingPopup() {
-    setPendingLoading(true)
-    clearClientCacheByUrl('/tuka/order/list')
-    client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 50 } })
-      .then(r => {
-        const pendingOrders = r.data.rows || []
-        // Also fetch ALL processing orders and filter client-side
-        // Using staffId param alone is unreliable — filter locally to avoid type mismatch
-        client.get('/tuka/order/list', { params: { status: 'processing', pageSize: 50 } })
-          .then(r2 => {
-            const allProcessing = r2.data.rows || []
-            // Filter to only THIS staff's claimed orders
-            // Use loose equality (==) to handle number/string mismatch from JSON
-            const myUserId = user?.userId
-            const myProcessing = allProcessing.filter(
-              (o: any) => myUserId != null && Number(o.staffId) === Number(myUserId)
-            )
-            setPendingRows([...pendingOrders, ...myProcessing])
-          })
-          .catch(() => setPendingRows(pendingOrders))
-      })
-      .catch(() => {})
-      .finally(() => setPendingLoading(false))
-  }
-
-  // Claim/accept a pending order (mark as processing)
-  // Uses atomic backend claim — if another staff got it first, shows a clear message.
-  async function claimOrder(orderId: number) {
-    setClaiming(orderId)
-    try {
-      await client.put('/tuka/order/audit', { id: orderId, status: 'processing', verifyRemark: '' })
-      loadPendingPopup()
-      load(page)
-      // Refresh global pending count
-      client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 1 } })
-        .then(r => { onPendingCountChange?.(r.data.total || 0) })
-    } catch (e: any) {
-      const msg: string = e.message || ''
-      if (msg.includes('already claimed') || msg.includes('409')) {
-        // Another staff grabbed it — refresh the list silently so it shows as processing
-        loadPendingPopup()
-        load(page)
-        // Show a non-blocking notification instead of a blocking alert
-        const toast = document.createElement('div')
-        toast.textContent = msg.replace('409: ', '') || 'Order already claimed by another staff'
-        toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#ff4d4f;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2)'
-        document.body.appendChild(toast)
-        setTimeout(() => toast.remove(), 3000)
-      } else {
-        alert(msg)
-      }
-    } finally { setClaiming(null) }
-  }
+  // Pending orders popup is handled globally by PendingOrdersPopup in App.tsx
+  // loadPendingPopup and claimOrder are no longer needed in this component
 
   async function submitAudit() {
     if (!auditRow) return
@@ -380,17 +326,9 @@ export default function OrdersScreen({
           <button className="icon-btn-sm" onClick={reset} title="重置">✕</button>
         </div>
 
-        {/* Right: pending orders badge button → opens popup */}
+        {/* Right side — refresh only */}
         <div className="toolbar-right">
-          <button
-            className="pending-btn"
-            onClick={() => { loadPendingPopup(); setPendingPopup(true) }}
-          >
-            待受理订单
-            {globalPendingCount > 0 && (
-              <span className="pending-badge">{globalPendingCount}</span>
-            )}
-          </button>
+          <button className="icon-btn-sm" onClick={() => load(page)} title="刷新">↻</button>
         </div>
       </div>
 
@@ -850,94 +788,6 @@ export default function OrdersScreen({
                   <span className="no-img">暂无收据</span>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── 待受理订单 Popup ── */}
-      {pendingPopup && (
-        <div className="modal-mask" onClick={() => setPendingPopup(false)}>
-          <div className="pp-list-popup" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="pp-list-header">
-              <span className="pp-list-title">待受理订单</span>
-              {pendingRows.length > 0 && (
-                <span className="pp-list-count">
-                  {pendingRows.filter(r => r.status === 'pending').length > 0 && `${pendingRows.filter(r => r.status === 'pending').length} 待接单`}
-                  {pendingRows.filter(r => r.status === 'pending').length > 0 && pendingRows.filter(r => r.status === 'processing').length > 0 && ' · '}
-                  {pendingRows.filter(r => r.status === 'processing').length > 0 && `${pendingRows.filter(r => r.status === 'processing').length} 我的处理中`}
-                </span>
-              )}
-              <button className="pp-list-close" onClick={() => setPendingPopup(false)}>✕</button>
-            </div>
-
-            {/* List body */}
-            <div className="pp-list-body">
-              {pendingRows.length === 0 ? (
-                <div className="pp-list-empty">暂无待受理订单</div>
-              ) : (                <table className="pp-list-table">
-                  <thead>
-                    <tr>
-                      <th>卡种</th>
-                      <th>面值</th>
-                      <th>结算金额</th>
-                      <th>数量</th>
-                      <th>类型</th>
-                      <th>国家</th>
-                      <th>时间</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingRows.map(r => (
-                      <tr key={r.id} style={{ background: r.status === 'processing' ? '#f0f9ff' : undefined }}>
-                        <td>{r.categoryName}</td>
-                        <td>{currSym(r.cardCurrency)}{r.cardAmount}</td>
-                        <td>{fmtNgn(r.ngnAmount)}</td>
-                        <td>{r.quantity ?? 1}</td>
-                        <td>{r.inputType || '—'}</td>
-                        <td>{countryLabel(r.cardCurrency)}</td>
-                        <td className="pp-list-time">{r.createTime?.slice(0, 16)}</td>
-                        <td>
-                          {r.status === 'processing' ? (
-                            // Already claimed — show who claimed it and a View button
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 11, color: '#1677ff', fontWeight: 600 }}>
-                                {(r as any).staffName || '处理中'}
-                              </span>
-                              <button
-                                className="pp-list-claim"
-                                style={{ background: '#fff', color: '#1677ff', border: '1px solid #1677ff' }}
-                                onClick={() => {
-                                  setPendingPopup(false)
-                                  setVerifyData(r)
-                                  setEditingNewAmount(String(r.newAmount ?? r.ngnAmount ?? ''))
-                                  setAuditRemark('')
-                                  setAuditImgFile(null)
-                                  setAdjustedAmount('')
-                                }}
-                              >
-                                查看
-                              </button>
-                            </div>
-                          ) : (
-                            canVerify && (
-                              <button
-                                className={'pp-list-claim' + (claiming === r.id ? ' loading' : '')}
-                                disabled={!!claiming}
-                                onClick={() => claimOrder(r.id)}
-                              >
-                                {claiming === r.id ? '接单中…' : '接单'}
-                              </button>
-                            )
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
             </div>
           </div>
         </div>

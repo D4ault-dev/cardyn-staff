@@ -50,14 +50,14 @@ function UserDetailModal({
   function loadOrders(p = 1) {
     setOrderLoading(true)
     getUserOrders(u.userId, p)
-      .then(r => { setOrders(r.rows); setOrderTotal(r.total); setOrderPage(p) })
+      .then((r: { rows: any[]; total: number }) => { setOrders(r.rows); setOrderTotal(r.total); setOrderPage(p) })
       .finally(() => setOrderLoading(false))
   }
 
   function loadTxns(p = 1) {
     setTxnLoading(true)
     getUserTransactions(u.userId, p)
-      .then(r => { setTxns(r.rows); setTxnTotal(r.total); setTxnPage(p) })
+      .then((r: { rows: any[]; total: number }) => { setTxns(r.rows); setTxnTotal(r.total); setTxnPage(p) })
       .finally(() => setTxnLoading(false))
   }
 
