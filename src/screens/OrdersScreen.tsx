@@ -149,13 +149,8 @@ export default function OrdersScreen({
       .then(() => { setCopyMsg('已复制！'); setTimeout(() => setCopyMsg(null), 2000) })
       .catch(() => { setCopyMsg('复制失败'); setTimeout(() => setCopyMsg(null), 2000) })
   }
-  // Pending orders popup
-  const [pendingPopup, setPendingPopup] = useState(false)
-  const [pendingRows,  setPendingRows]  = useState<Order[]>([])
-  const [pendingLoading, setPendingLoading] = useState(false)
-  const [claiming,     setClaiming]     = useState<number | null>(null)
-  const pendingTimer = useRef<ReturnType<typeof setInterval> | null>(null)
-  const prevPending  = useRef(0)
+  // Pending orders popup — handled globally by PendingOrdersPopup in App.tsx
+  // No local popup state needed here anymore
 
   // Load countries
   useEffect(() => {
@@ -163,36 +158,6 @@ export default function OrdersScreen({
       .then(r => setCountries((r.data.rows || []).map((c: any) => c.name)))
       .catch(() => {})
   }, [])
-
-  // Show pending popup on mount and keep it open whenever there are pending orders
-  useEffect(() => {
-    loadPendingPopup()
-    setPendingPopup(true)
-  }, []) // eslint-disable-line
-
-  // Auto-open popup when a new order alert fires from global polling
-  useEffect(() => {
-    if (newOrderAlert) {
-      loadPendingPopup()
-      setPendingPopup(true)
-      onAlertDismissed?.()
-    }
-  }, [newOrderAlert]) // eslint-disable-line
-
-  // Auto-refresh pending popup every 8s — always running so staff see new orders immediately
-  useEffect(() => {
-    const t = setInterval(() => {
-      if (!document.hidden) loadPendingPopup()
-    }, 8_000)
-    return () => clearInterval(t)
-  }, []) // eslint-disable-line
-
-  // Auto-show popup when pending/processing orders arrive — never auto-hide
-  useEffect(() => {
-    if (pendingRows.length > 0) setPendingPopup(true)
-    // NOTE: deliberately NOT closing when pendingRows.length === 0
-    // Staff must manually close with X — so they always see the current state
-  }, [pendingRows.length])
 
   // Silent background auto-refresh every 15s — only when tab is visible
   useEffect(() => {

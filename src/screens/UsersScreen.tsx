@@ -1,20 +1,278 @@
-import React, { useEffect, useState, useCallback } from 'react'
-import { getUsers, setUserStatus } from '../api/users'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { getUsers, setUserStatus, getUserOrders, getUserTransactions } from '../api/users'
 import type { AppUser } from '../types'
 import { useAuth } from '../context/AuthContext'
-import { ROLES, isSuper } from '../utils/roles'
+import { isSuper } from '../utils/roles'
 import { fmtUid } from '../utils/resolveUrl'
 import DateRangePicker from '../components/DateRangePicker'
 import { useDebounce } from '../hooks/useDebounce'
 import './OrdersScreen.css'
 import './UsersScreen.css'
 
-function fmtNgn(n: number) { return '₦' + (n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }
-
-// status: 1 = active (正常), 0 = banned (封禁)
+function fmtNgn(n: number) {
+  return '₦' + (n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })
+}
 function statusLabel(s: number) { return s === 1 ? '正常' : '封禁' }
 function statusColor(s: number) { return s === 1 ? '#52c41a' : '#ff4d4f' }
 
+// ── UserDetailModal ──────────────────────────────────────────────────────────
+type Tab = 'profile' | 'orders' | 'transactions'
+
+function UserDetailModal({
+  user: u,
+  canManage,
+  toggling,
+  onToggle,
+  onClose,
+}: {
+  user: AppUser
+  canManage: boolean
+  toggling: boolean
+  onToggle: () => void
+  onClose: () => void
+}) {
+  const [tab, setTab] = useState<Tab>('profile')
+
+  // Orders state
+  const [orders,       setOrders]       = useState<any[]>([])
+  const [orderTotal,   setOrderTotal]   = useState(0)
+  const [orderPage,    setOrderPage]    = useState(1)
+  const [orderLoading, setOrderLoading] = useState(false)
+
+  // Transactions state
+  const [txns,       setTxns]       = useState<any[]>([])
+  const [txnTotal,   setTxnTotal]   = useState(0)
+  const [txnPage,    setTxnPage]    = useState(1)
+  const [txnLoading, setTxnLoading] = useState(false)
+  const ordersLoaded = useRef(false)
+  const txnsLoaded   = useRef(false)
+
+  function loadOrders(p = 1) {
+    setOrderLoading(true)
+    getUserOrders(u.userId, p)
+      .then(r => { setOrders(r.rows); setOrderTotal(r.total); setOrderPage(p) })
+      .finally(() => setOrderLoading(false))
+  }
+
+  function loadTxns(p = 1) {
+    setTxnLoading(true)
+    getUserTransactions(u.userId, p)
+      .then(r => { setTxns(r.rows); setTxnTotal(r.total); setTxnPage(p) })
+      .finally(() => setTxnLoading(false))
+  }
+
+  function switchTab(t: Tab) {
+    setTab(t)
+    if (t === 'orders' && !ordersLoaded.current) { ordersLoaded.current = true; loadOrders(1) }
+    if (t === 'transactions' && !txnsLoaded.current) { txnsLoaded.current = true; loadTxns(1) }
+  }
+
+  const orderStatusColor = (s: string) => {
+    if (s === 'paid')       return { bg: '#f6ffed', color: '#52c41a' }
+    if (s === 'rejected')   return { bg: '#fff2f0', color: '#ff4d4f' }
+    if (s === 'processing') return { bg: '#e6f4ff', color: '#1677ff' }
+    return { bg: '#f5f5f5', color: '#999' }
+  }
+
+  const txnColor = (amt: number) => amt >= 0 ? '#52c41a' : '#ff4d4f'
+
+  return (
+    <div className="ud-mask" onClick={onClose}>
+      <div className="ud-modal" onClick={e => e.stopPropagation()}>
+
+        {/* ── Header bar ── */}
+        <div className="ud-header">
+          <div className="ud-header-left">
+            <div className="ud-avatar">
+              {u.avatar
+                ? <img src={u.avatar} alt="" />
+                : <span>{(u.realName || u.phone || '?')[0].toUpperCase()}</span>
+              }
+            </div>
+            <div>
+              <div className="ud-name">{u.realName || u.phone || '—'}</div>
+              <div className="ud-meta">
+                <span className="ud-uid">ID {fmtUid(u.userId)}</span>
+                {u.phone && <span className="ud-sep">·</span>}
+                {u.phone && <span>{u.phone}</span>}
+                {u.email && <span className="ud-sep">·</span>}
+                {u.email && <span>{u.email}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="ud-header-right">
+            <span
+              className="ud-status-badge"
+              style={{ background: statusColor(u.status) + '18', color: statusColor(u.status) }}
+            >
+              <span className="ud-status-dot" style={{ background: statusColor(u.status) }} />
+              {statusLabel(u.status)}
+            </span>
+            {canManage && (
+              <button
+                className={'ud-action-btn ' + (u.status === 1 ? 'danger' : 'success')}
+                disabled={toggling}
+                onClick={onToggle}
+              >
+                {toggling ? '...' : u.status === 1 ? '封禁' : '解封'}
+              </button>
+            )}
+            <button className="ud-close" onClick={onClose}>✕</button>
+          </div>
+        </div>
+
+        {/* ── Stat cards ── */}
+        <div className="ud-stats">
+          <div className="ud-stat">
+            <div className="ud-stat-label">余额</div>
+            <div className="ud-stat-value green">{fmtNgn(u.balance)}</div>
+          </div>
+          <div className="ud-stat">
+            <div className="ud-stat-label">总销售额</div>
+            <div className="ud-stat-value green">{fmtNgn(u.totalSales)}</div>
+          </div>
+          <div className="ud-stat">
+            <div className="ud-stat-label">总提现</div>
+            <div className="ud-stat-value">{fmtNgn(u.totalWithdrawn)}</div>
+          </div>
+          <div className="ud-stat">
+            <div className="ud-stat-label">交易次数</div>
+            <div className="ud-stat-value">{u.tradeCount}</div>
+          </div>
+          <div className="ud-stat">
+            <div className="ud-stat-label">等级</div>
+            <div className="ud-stat-value">Lv {u.level}</div>
+          </div>
+          <div className="ud-stat">
+            <div className="ud-stat-label">国家</div>
+            <div className="ud-stat-value">{u.country || '—'}</div>
+          </div>
+        </div>
+
+        {/* ── Tabs ── */}
+        <div className="ud-tabs">
+          <button className={'ud-tab' + (tab === 'profile'      ? ' active' : '')} onClick={() => switchTab('profile')}>基本信息</button>
+          <button className={'ud-tab' + (tab === 'orders'       ? ' active' : '')} onClick={() => switchTab('orders')}>
+            订单 {orderTotal > 0 && <span className="ud-tab-count">{orderTotal}</span>}
+          </button>
+          <button className={'ud-tab' + (tab === 'transactions' ? ' active' : '')} onClick={() => switchTab('transactions')}>
+            交易记录 {txnTotal > 0 && <span className="ud-tab-count">{txnTotal}</span>}
+          </button>
+        </div>
+
+        {/* ── Tab content ── */}
+        <div className="ud-body">
+
+          {/* Profile tab */}
+          {tab === 'profile' && (
+            <div className="ud-profile-grid">
+              <div className="ud-row"><span className="ud-lbl">用户ID</span><span className="ud-val mono blue">{fmtUid(u.userId)}</span></div>
+              <div className="ud-row"><span className="ud-lbl">Profile ID</span><span className="ud-val mono muted">{u.id}</span></div>
+              <div className="ud-row"><span className="ud-lbl">手机号</span><span className="ud-val mono">{u.phone || '—'}</span></div>
+              <div className="ud-row"><span className="ud-lbl">邮箱</span><span className="ud-val">{u.email || '—'}</span></div>
+              <div className="ud-row"><span className="ud-lbl">真实姓名</span><span className="ud-val">{u.realName || '—'}</span></div>
+              <div className="ud-row"><span className="ud-lbl">邀请码</span><span className="ud-val mono">{u.inviteCode || '—'}</span></div>
+              <div className="ud-row"><span className="ud-lbl">注册时间</span><span className="ud-val">{u.createTime?.slice(0, 10)}</span></div>
+              <div className="ud-row"><span className="ud-lbl">国家</span><span className="ud-val">{u.country || '—'}</span></div>
+            </div>
+          )}
+
+          {/* Orders tab */}
+          {tab === 'orders' && (
+            <div className="ud-table-wrap">
+              {orderLoading && orders.length === 0 && <div className="ud-loading">加载中...</div>}
+              {!orderLoading && orders.length === 0 && <div className="ud-empty">暂无订单</div>}
+              {orders.length > 0 && (
+                <table className="ud-table">
+                  <thead>
+                    <tr>
+                      <th>订单号</th>
+                      <th>品类</th>
+                      <th>礼品卡</th>
+                      <th>金额</th>
+                      <th>状态</th>
+                      <th>日期</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map((o: any) => {
+                      const sc = orderStatusColor(o.status)
+                      return (
+                        <tr key={o.id}>
+                          <td><span className="mono" style={{ fontSize: 11 }}>{o.orderNo}</span></td>
+                          <td>{o.categoryName || '—'}</td>
+                          <td>{o.cardCurrency} {o.cardAmount}</td>
+                          <td className="amount-green">{fmtNgn(o.ngnAmount)}</td>
+                          <td>
+                            <span className="ud-pill" style={{ background: sc.bg, color: sc.color }}>
+                              {o.status}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: 11, color: '#999' }}>{o.createTime?.slice(0, 10)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+              {orderTotal > 15 && (
+                <div className="ud-pagination">
+                  <button disabled={orderPage <= 1} onClick={() => loadOrders(orderPage - 1)}>‹</button>
+                  <span>{orderPage} / {Math.ceil(orderTotal / 15)}</span>
+                  <button disabled={orderPage >= Math.ceil(orderTotal / 15)} onClick={() => loadOrders(orderPage + 1)}>›</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Transactions tab */}
+          {tab === 'transactions' && (
+            <div className="ud-table-wrap">
+              {txnLoading && txns.length === 0 && <div className="ud-loading">加载中...</div>}
+              {!txnLoading && txns.length === 0 && <div className="ud-empty">暂无交易记录</div>}
+              {txns.length > 0 && (
+                <table className="ud-table">
+                  <thead>
+                    <tr>
+                      <th>类型</th>
+                      <th>金额</th>
+                      <th>订单号</th>
+                      <th>日期</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {txns.map((t: any) => (
+                      <tr key={t.id}>
+                        <td>
+                          <span className="ud-type-badge">{t.type}</span>
+                        </td>
+                        <td style={{ fontWeight: 600, color: txnColor(t.amount), fontFamily: 'monospace' }}>
+                          {t.amount >= 0 ? '+' : ''}{fmtNgn(t.amount)}
+                        </td>
+                        <td><span className="mono muted" style={{ fontSize: 11 }}>{t.orderNo || '—'}</span></td>
+                        <td style={{ fontSize: 11, color: '#999' }}>{t.createTime?.slice(0, 10)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {txnTotal > 15 && (
+                <div className="ud-pagination">
+                  <button disabled={txnPage <= 1} onClick={() => loadTxns(txnPage - 1)}>‹</button>
+                  <span>{txnPage} / {Math.ceil(txnTotal / 15)}</span>
+                  <button disabled={txnPage >= Math.ceil(txnTotal / 15)} onClick={() => loadTxns(txnPage + 1)}>›</button>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main screen ──────────────────────────────────────────────────────────────
 export default function UsersScreen() {
   const { user } = useAuth()
   const canManage = isSuper(user?.roleType || '')
@@ -24,10 +282,9 @@ export default function UsersScreen() {
   const [page,    setPage]    = useState(1)
   const pageSize = 10
   const [loading, setLoading] = useState(false)
-  const [firstLoad, setFirstLoad] = useState(false)  // no skeleton
-  const [search,  setSearch]  = useState('')  // UID / phone / email / name
+  const [search,  setSearch]  = useState('')
   const debouncedSearch = useDebounce(search, 400)
-  const [detail,  setDetail]  = useState<AppUser | null>(null)
+  const [detail,   setDetail]   = useState<AppUser | null>(null)
   const [startDate, setStartDate] = useState('')
   const [endDate,   setEndDate]   = useState('')
   const [startTime, setStartTime] = useState('')
@@ -46,7 +303,7 @@ export default function UsersScreen() {
       onFresh: r => { setRows(r.rows); setTotal(r.total) },
     })
       .then(r => { setRows(r.rows); setTotal(r.total) })
-      .finally(() => { setLoading(false); setFirstLoad(false) })
+      .finally(() => setLoading(false))
   }, [pageSize, debouncedSearch, startDate, endDate, startTime, endTime])
 
   useEffect(() => { load(1); setPage(1) }, [debouncedSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
@@ -86,7 +343,7 @@ export default function UsersScreen() {
       <div className="orders-toolbar">
         <div className="toolbar-left">
           <input className="filter-input-sm" placeholder="UID/手机/邮箱/姓名" value={search}
-            onChange={e => setSearch(e.target.value)} style={{ width: 180 }} />
+            onChange={e => setSearch(e.target.value)} style={{ width: 200 }} />
           <DateRangePicker
             startDate={startDate} endDate={endDate}
             startTime={startTime} endTime={endTime}
@@ -112,7 +369,6 @@ export default function UsersScreen() {
               <th>余额</th>
               <th>总销售额</th>
               <th>交易次数</th>
-              <th>邀请码</th>
               <th>等级</th>
               <th>国家</th>
               <th>状态</th>
@@ -121,19 +377,17 @@ export default function UsersScreen() {
             </tr>
           </thead>
           <tbody>
-            {(loading && firstLoad) && (
-              <>
-                {[1,2,3,4,5].map(k => (
-                  <tr key={k} className="skeleton-row">
-                    {[1,2,3,4,5,6,7,8,9,10,11].map(c => (
-                      <td key={c}><div className="skeleton-cell" /></td>
-                    ))}
-                  </tr>
-                ))}
-              </>
+            {loading && rows.length === 0 && (
+              [1,2,3,4,5].map(k => (
+                <tr key={k} className="skeleton-row">
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(c => (
+                    <td key={c}><div className="skeleton-cell" /></td>
+                  ))}
+                </tr>
+              ))
             )}
-            {!(loading && firstLoad) && rows.length === 0 && <tr><td colSpan={11} className="table-empty">暂无数据</td></tr>}
-            {!(loading && firstLoad) && rows.map(r => (
+            {!loading && rows.length === 0 && <tr><td colSpan={12} className="table-empty">暂无数据</td></tr>}
+            {rows.map(r => (
               <tr key={r.userId}>
                 <td><span className="mono" style={{ fontWeight: 700, color: '#1677ff' }}>{fmtUid(r.userId)}</span></td>
                 <td className="mono">{r.phone || '—'}</td>
@@ -142,15 +396,14 @@ export default function UsersScreen() {
                 <td className="amount-green">{fmtNgn(r.balance)}</td>
                 <td className="amount-green">{fmtNgn(r.totalSales)}</td>
                 <td>{r.tradeCount}</td>
-                <td><span className="mono" style={{ fontSize: 11 }}>{r.inviteCode || '—'}</span></td>
                 <td>Lv {r.level}</td>
                 <td>{r.country || '—'}</td>
                 <td>
                   <span className="status-pill" style={{ background: statusColor(r.status) + '20', color: statusColor(r.status) }}>
-                    ● {statusLabel(r.status)}
+                    <span style={{ fontSize: 8 }}>●</span> {statusLabel(r.status)}
                   </span>
                 </td>
-                <td>{r.createTime?.slice(0, 10)}</td>
+                <td style={{ fontSize: 12, color: '#888' }}>{r.createTime?.slice(0, 10)}</td>
                 <td>
                   <button className="act-btn blue" onClick={() => setDetail(r)}>查看</button>
                   {canManage && (
@@ -185,38 +438,13 @@ export default function UsersScreen() {
 
       {/* Detail modal */}
       {detail && (
-        <div className="modal-mask" onClick={() => setDetail(null)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <div className="modal-head"><span>用户详情</span><button onClick={() => setDetail(null)}>✕</button></div>
-            <div className="modal-body">
-              {detail.avatar && (
-                <div style={{ textAlign: 'center', marginBottom: 12 }}>
-                  <img src={detail.avatar} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover' }} alt="" />
-                </div>
-              )}
-              <div className="user-detail-grid">
-                <div className="udg-item"><span className="udg-label">用户ID</span><span className="udg-value" style={{ fontWeight: 700, color: '#1677ff', fontFamily: 'monospace' }}>{fmtUid(detail.userId)}</span></div>
-                <div className="udg-item"><span className="udg-label">Profile ID</span><span className="udg-value mono" style={{ color: '#999', fontSize: 11 }}>{detail.id}</span></div>
-                <div className="udg-item"><span className="udg-label">手机号</span><span className="udg-value mono">{detail.phone || '—'}</span></div>
-                <div className="udg-item"><span className="udg-label">邮箱</span><span className="udg-value">{detail.email || '—'}</span></div>
-                <div className="udg-item"><span className="udg-label">真实姓名</span><span className="udg-value">{detail.realName || '—'}</span></div>
-                <div className="udg-item"><span className="udg-label">邀请码</span><span className="udg-value mono">{detail.inviteCode || '—'}</span></div>
-                <div className="udg-item"><span className="udg-label">余额</span><span className="udg-value amount-green">{fmtNgn(detail.balance)}</span></div>
-                <div className="udg-item"><span className="udg-label">总销售额</span><span className="udg-value amount-green">{fmtNgn(detail.totalSales)}</span></div>
-                <div className="udg-item"><span className="udg-label">总提现</span><span className="udg-value">{fmtNgn(detail.totalWithdrawn)}</span></div>
-                <div className="udg-item"><span className="udg-label">交易次数</span><span className="udg-value">{detail.tradeCount}</span></div>
-                <div className="udg-item"><span className="udg-label">等级</span><span className="udg-value">Lv {detail.level}</span></div>
-                <div className="udg-item"><span className="udg-label">国家</span><span className="udg-value">{detail.country || '—'}</span></div>
-                <div className="udg-item"><span className="udg-label">状态</span>
-                  <span className="status-pill" style={{ background: statusColor(detail.status) + '20', color: statusColor(detail.status) }}>
-                    ● {statusLabel(detail.status)}
-                  </span>
-                </div>
-                <div className="udg-item"><span className="udg-label">注册时间</span><span className="udg-value">{detail.createTime?.slice(0, 10)}</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <UserDetailModal
+          user={detail}
+          canManage={canManage}
+          toggling={toggling === detail.userId}
+          onToggle={() => handleToggleStatus(detail)}
+          onClose={() => setDetail(null)}
+        />
       )}
     </div>
   )

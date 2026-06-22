@@ -3,7 +3,7 @@ import { getWithdrawals, approveWithdrawal, rejectWithdrawal } from '../api/with
 import { invalidatePrefix } from '../api/cache'
 import type { Withdrawal } from '../types'
 import { useAuth } from '../context/AuthContext'
-import { canProcessPayments } from '../utils/roles'
+import { canProcessPayments, isSuper } from '../utils/roles'
 import { getWithdrawalFee } from '../api/config'
 import client from '../api/client'
 import DateRangePicker from '../components/DateRangePicker'
@@ -47,11 +47,15 @@ export default function WithdrawalsScreen({
   newWdAlert = false,
   onAlertDismissed,
   onPendingCountChange,
+  autoOpenWithdrawal = null,
+  onAutoOpenDone,
 }: {
   globalPendingCount?: number
   newWdAlert?: boolean
   onAlertDismissed?: () => void
   onPendingCountChange?: (n: number) => void
+  autoOpenWithdrawal?: any
+  onAutoOpenDone?: () => void
 }) {
   const { user } = useAuth()
   const isPayer = canProcessPayments(user?.roleType || '')
@@ -135,6 +139,16 @@ export default function WithdrawalsScreen({
   }, [pageSize, status, debouncedUserSearch, startDate, endDate, startTime, endTime])
 
   useEffect(() => { load(1); setPage(1) }, [status, debouncedUserSearch, startDate, endDate, startTime, endTime]) // eslint-disable-line
+
+  // Auto-open pay modal when staff clicks 处理 from the global popup
+  useEffect(() => {
+    if (autoOpenWithdrawal) {
+      setPayModal(autoOpenWithdrawal)
+      setRemark('')
+      setReceiptFile(null)
+      onAutoOpenDone?.()
+    }
+  }, [autoOpenWithdrawal]) // eslint-disable-line
 
   // Auto-jump to pending tab when a new withdrawal alert arrives
   useEffect(() => {
@@ -300,8 +314,15 @@ export default function WithdrawalsScreen({
                       <button className="act-btn blue" onClick={() => setDetail(r)}>查看</button>
                       {isPayer && r.status === 'pending' && (
                         <>
-                          <button className="act-btn primary" onClick={() => { setPayModal(r); setRemark(''); setReceiptFile(null) }}>付款</button>
-                          <button className="act-btn danger"  onClick={() => { setRejectModal(r); setRemark('') }}>拒绝</button>
+                          {/* Only show pay/reject to the staff who claimed it OR super admin */}
+                          {(!(r as any).staffId || Number((r as any).staffId) === 0 || isSuper(user?.roleType || '') || Number((r as any).staffId) === Number(user?.userId)) ? (
+                            <>
+                              <button className="act-btn primary" onClick={() => { setPayModal(r); setRemark(''); setReceiptFile(null) }}>付款</button>
+                              <button className="act-btn danger"  onClick={() => { setRejectModal(r); setRemark('') }}>拒绝</button>
+                            </>
+                          ) : (
+                            <span style={{ fontSize: 11, color: '#999' }}>{(r as any).staffName || '处理中'}</span>
+                          )}
                         </>
                       )}
                     </div>

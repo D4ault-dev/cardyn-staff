@@ -8,6 +8,7 @@ import OnlineBar from './components/OnlineBar'
 import ChatToast from './components/ChatToast'
 import UpdateBanner from './components/UpdateBanner'
 import PendingOrdersPopup from './components/PendingOrdersPopup'
+import PendingWithdrawalsPopup from './components/PendingWithdrawalsPopup'
 import type { ToastItem } from './components/ChatToast'
 import { playNewChat, playNewOrder, playNewWithdrawal } from './utils/sound'
 import { initAudio } from './utils/sound'
@@ -32,6 +33,7 @@ function Shell() {
   const [pendingCount, setPendingCount] = useState(0)
   const [newOrderAlert, setNewOrderAlert] = useState(false)
   const [newWdAlert, setNewWdAlert] = useState(false)
+  const [autoOpenWithdrawal, setAutoOpenWithdrawal] = useState<any>(null)
 
   useHeartbeat()
 
@@ -166,6 +168,8 @@ function Shell() {
               newWdAlert={newWdAlert}
               onAlertDismissed={() => setNewWdAlert(false)}
               onPendingCountChange={n => setWdBadge(n)}
+              autoOpenWithdrawal={autoOpenWithdrawal}
+              onAutoOpenDone={() => setAutoOpenWithdrawal(null)}
             />
           } />
           <Route path="/users"       element={<UsersScreen />} />
@@ -182,6 +186,23 @@ function Shell() {
           onOrderClaimed={() => {
             setOrderBadge(0)
             setNewOrderAlert(false)
+          }}
+        />
+      )}
+
+      {/* Global pending withdrawals popup — visible on ALL pages */}
+      {user && (
+        <PendingWithdrawalsPopup
+          globalPendingCount={wdBadge}
+          newWdAlert={newWdAlert}
+          onAlertDismissed={() => setNewWdAlert(false)}
+          onWithdrawalClaimed={() => {
+            setWdBadge(0)
+            setNewWdAlert(false)
+          }}
+          onProcess={(wd) => {
+            // Navigate to withdrawals tab and open pay modal
+            setAutoOpenWithdrawal(wd)
           }}
         />
       )}

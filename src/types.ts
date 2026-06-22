@@ -81,6 +81,8 @@ export type Withdrawal = {
   status: string
   remark: string | null
   receiptImage: string | null
+  staffId: number | null
+  staffName: string | null
   updateTime: string
   createTime: string
 }

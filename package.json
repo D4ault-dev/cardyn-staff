@@ -1,7 +1,7 @@
 {
   "name": "staff-desktop",
   "private": true,
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "Cardyn Staff Customer Service Dashboard",
   "author": "Cardyn",
   "main": "electron/main.cjs",
