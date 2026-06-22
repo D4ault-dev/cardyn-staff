@@ -170,7 +170,7 @@ const progressFill: React.CSSProperties = {
   transition: 'width 0.3s ease',
 }
 const versionBar: React.CSSProperties = {
-  position: 'fixed', bottom: 10, right: 12,
+  position: 'fixed', bottom: 10, left: 12,  // moved to LEFT so it doesn't overlap pending FAB
   zIndex: 9999, display: 'flex', alignItems: 'center', gap: 8,
 }
 const verText: React.CSSProperties = {

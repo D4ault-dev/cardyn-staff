@@ -101,11 +101,12 @@ export default function OrdersScreen({
   const { user } = useAuth()
   const canVerify = canVerifyOrders(user?.roleType || '')
   // A staff can edit an order only if they claimed it (staffId matches) or they're super admin
+  // Use Number() comparison to handle string/number type mismatch from JSON
   const canEditOrder = (order: Order | null) => {
     if (!order) return false
     if (isSuper(user?.roleType || '')) return true         // super admin can always edit
     if (!order.staffId) return false                        // unclaimed order — no one can edit yet
-    return order.staffId === user?.userId                   // only the claimer can edit
+    return Number(order.staffId) === Number(user?.userId)  // only the claimer can edit
   }
 
   const [rows,         setRows]         = useState<Order[]>([])
@@ -113,7 +114,7 @@ export default function OrdersScreen({
   const [page,         setPage]         = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [loading,      setLoading]      = useState(false)
-  const [firstLoad,    setFirstLoad]    = useState(true)
+  const [firstLoad,    setFirstLoad]    = useState(false)  // no skeleton — data appears immediately
   const [countries,    setCountries]    = useState<string[]>([])
   const [country,      setCountry]      = useState('')
   const [status,       setStatus]       = useState('')  // default all
@@ -256,23 +257,28 @@ export default function OrdersScreen({
   }
 
   // Load pending orders for popup:
-  // - All unclaimed (pending) orders — any staff can claim
+  // - All unclaimed (pending) orders — any staff with verify role can claim
   // - Processing orders claimed by THIS staff — only they see their own
   function loadPendingPopup() {
     setPendingLoading(true)
     clearClientCacheByUrl('/tuka/order/list')
     client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 50 } })
       .then(r => {
-        const pendingRows = r.data.rows || []
-        // Also fetch processing orders claimed by THIS staff only
-        client.get('/tuka/order/list', { params: { status: 'processing', pageSize: 50, staffId: user?.userId } })
+        const pendingOrders = r.data.rows || []
+        // Also fetch ALL processing orders and filter client-side
+        // Using staffId param alone is unreliable — filter locally to avoid type mismatch
+        client.get('/tuka/order/list', { params: { status: 'processing', pageSize: 50 } })
           .then(r2 => {
-            const myProcessing = (r2.data.rows || []).filter(
-              (o: any) => o.staffId === user?.userId
+            const allProcessing = r2.data.rows || []
+            // Filter to only THIS staff's claimed orders
+            // Use loose equality (==) to handle number/string mismatch from JSON
+            const myUserId = user?.userId
+            const myProcessing = allProcessing.filter(
+              (o: any) => myUserId != null && Number(o.staffId) === Number(myUserId)
             )
-            setPendingRows([...pendingRows, ...myProcessing])
+            setPendingRows([...pendingOrders, ...myProcessing])
           })
-          .catch(() => setPendingRows(pendingRows))
+          .catch(() => setPendingRows(pendingOrders))
       })
       .catch(() => {})
       .finally(() => setPendingLoading(false))

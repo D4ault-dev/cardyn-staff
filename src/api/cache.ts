@@ -9,7 +9,7 @@
  * - Call invalidate(key) or invalidatePrefix(prefix) after mutations
  */
 
-const CACHE_TTL_MS = 30_000  // 30 seconds — show stale instantly, refresh in background
+const CACHE_TTL_MS = 60_000  // 60 seconds — background refresh every 15s handles freshness
 
 interface CacheEntry<T> {
   data: T

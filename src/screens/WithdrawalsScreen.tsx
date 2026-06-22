@@ -61,7 +61,7 @@ export default function WithdrawalsScreen({
   const [page,       setPage]       = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [loading,    setLoading]    = useState(false)
-  const [firstLoad,  setFirstLoad]  = useState(true)
+  const [firstLoad,  setFirstLoad]  = useState(false)  // no skeleton
   const [status,     setStatus]     = useState('')  // default all
   const [userSearch, setUserSearch] = useState('')  // NEW: UID / phone / name
   const debouncedUserSearch = useDebounce(userSearch, 400)

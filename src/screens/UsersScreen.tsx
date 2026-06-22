@@ -24,7 +24,7 @@ export default function UsersScreen() {
   const [page,    setPage]    = useState(1)
   const pageSize = 10
   const [loading, setLoading] = useState(false)
-  const [firstLoad, setFirstLoad] = useState(true)
+  const [firstLoad, setFirstLoad] = useState(false)  // no skeleton
   const [search,  setSearch]  = useState('')  // UID / phone / email / name
   const debouncedSearch = useDebounce(search, 400)
   const [detail,  setDetail]  = useState<AppUser | null>(null)

@@ -7,8 +7,10 @@ import type { NotificationEvent } from './hooks/useChatNotifications'
 import OnlineBar from './components/OnlineBar'
 import ChatToast from './components/ChatToast'
 import UpdateBanner from './components/UpdateBanner'
+import PendingOrdersPopup from './components/PendingOrdersPopup'
 import type { ToastItem } from './components/ChatToast'
 import { playNewChat, playNewOrder, playNewWithdrawal } from './utils/sound'
+import { initAudio } from './utils/sound'
 import LoginScreen from './screens/LoginScreen'
 
 // Lazy-load heavy screens — only parsed + executed when first navigated to
@@ -32,6 +34,9 @@ function Shell() {
   const [newWdAlert, setNewWdAlert] = useState(false)
 
   useHeartbeat()
+
+  // Pre-warm audio engine on first render — critical for Windows AudioContext policy
+  React.useEffect(() => { initAudio() }, [])
 
   const handleNotification = useCallback((event: NotificationEvent) => {
     const id = `${event.type}-${Date.now()}`
@@ -167,6 +172,19 @@ function Shell() {
         </Routes>
         </Suspense>
       </div>
+
+      {/* Global pending orders popup — visible on ALL pages */}
+      {user && (
+        <PendingOrdersPopup
+          globalPendingCount={pendingCount}
+          newOrderAlert={newOrderAlert}
+          onAlertDismissed={() => setNewOrderAlert(false)}
+          onOrderClaimed={() => {
+            setOrderBadge(0)
+            setNewOrderAlert(false)
+          }}
+        />
+      )}
 
       {/* Toast notifications */}
       <ChatToast

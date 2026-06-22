@@ -1,0 +1,143 @@
+/* Global pending orders popup — floats above all screens */
+
+.pp-global-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 8888;
+  background: #1677ff;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(22,119,255,0.4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pp-global-fab:hover { background: #0958d9; }
+
+.pp-global-badge {
+  background: #ff4d4f;
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 800;
+  min-width: 18px;
+  text-align: center;
+}
+
+.pp-global-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pp-global-popup {
+  background: #fff;
+  border-radius: 12px;
+  width: 780px;
+  max-width: 95vw;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  overflow: hidden;
+}
+
+.pp-global-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.pp-global-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #303133;
+}
+
+.pp-global-count {
+  font-size: 12px;
+  color: #1677ff;
+  background: #e6f4ff;
+  border-radius: 10px;
+  padding: 2px 10px;
+  font-weight: 600;
+}
+
+.pp-global-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #999;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.pp-global-close:hover { background: #f5f5f5; color: #333; }
+
+.pp-global-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.pp-global-empty {
+  text-align: center;
+  padding: 40px;
+  color: #bbb;
+  font-size: 13px;
+}
+
+.pp-global-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pp-global-table th {
+  background: #f5f7fa;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 12px;
+  color: #606266;
+  font-weight: 600;
+  border-bottom: 1px solid #ebeef5;
+  white-space: nowrap;
+}
+
+.pp-global-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f5f5f5;
+  color: #303133;
+}
+
+.pp-global-table tr:hover td { background: #fafafa; }
+
+.pp-global-claim {
+  background: #1677ff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pp-global-claim:hover { background: #0958d9; }
+.pp-global-claim:disabled { background: #bbb; cursor: not-allowed; }
+.pp-global-claim.loading { background: #69b1ff; }
