@@ -194,23 +194,53 @@ export function playError() {
   })
 }
 
-// 💸 New withdrawal request — cash register style
+// Pre-load the withdrawal sound
+let _withdrawalAudio: HTMLAudioElement | null = null
+function getWithdrawalSound(): HTMLAudioElement {
+  if (!_withdrawalAudio) {
+    const path = resolveAudioPath('new-withdrawal.m4a')
+    _withdrawalAudio = new Audio(path)
+    _withdrawalAudio.volume = 0.9
+    _withdrawalAudio.preload = 'auto'
+    _withdrawalAudio.load()
+  }
+  return _withdrawalAudio
+}
+
+// 💸 New withdrawal request — plays the QING YI Space 2 sound
 export function playNewWithdrawal() {
-  ensureCtxReady().then(ready => {
-    if (!ready) return
-    tone(1047, 0.08, 0.4, 'square')
-    setTimeout(() => tone(1319, 0.08, 0.4, 'square'), 100)
-    setTimeout(() => tone(1568, 0.08, 0.4, 'square'), 200)
-    setTimeout(() => tone(2093, 0.2,  0.4, 'square'), 300)
-  })
+  try {
+    const snd = getWithdrawalSound()
+    snd.currentTime = 0
+    const p = snd.play()
+    if (p) {
+      p.catch(() => {
+        // Fallback to synth if audio fails
+        ensureCtxReady().then(ready => {
+          if (!ready) return
+          tone(1047, 0.08, 0.4, 'square')
+          setTimeout(() => tone(1319, 0.08, 0.4, 'square'), 100)
+          setTimeout(() => tone(1568, 0.08, 0.4, 'square'), 200)
+          setTimeout(() => tone(2093, 0.2,  0.4, 'square'), 300)
+        })
+      })
+    }
+  } catch {
+    ensureCtxReady().then(ready => {
+      if (!ready) return
+      tone(1047, 0.08, 0.4, 'square')
+      setTimeout(() => tone(1319, 0.08, 0.4, 'square'), 100)
+      setTimeout(() => tone(1568, 0.08, 0.4, 'square'), 200)
+      setTimeout(() => tone(2093, 0.2,  0.4, 'square'), 300)
+    })
+  }
 }
 
 // ── Pre-warm audio on first click ─────────────────────────────────────────────
 // Call this once when the app starts to ensure audio is ready
 export function initAudio() {
-  // Pre-load audio files in background
   try { getOrderSound() } catch {}
   try { getBell() } catch {}
-  // Resume AudioContext if it was created suspended
+  try { getWithdrawalSound() } catch {}
   if (ctx) ensureCtxReady().catch(() => {})
 }
