@@ -53,15 +53,17 @@ export default function PendingOrdersPopup({
   const [rows, setRows] = useState<PendingOrder[]>([])
   const [loading, setLoading] = useState(false)
   const [claiming, setClaiming] = useState<number | null>(null)
+  // Prevents auto-reopen after staff closes — only new unclaimed orders reopen it
+  const suppressAutoOpen = useRef(false)
+  // Track how many unclaimed pending orders we last saw — only reopen on NEW orders
+  const lastPendingCount = useRef(0)
 
-  const load = useCallback(() => {
+  const load = useCallback((forceShow = false) => {
     if (!canVerify) return
     clearClientCacheByUrl('/tuka/order/list')
-    // Fetch pending orders (unclaimed)
     client.get('/tuka/order/list', { params: { status: 'pending', pageSize: 50 } })
       .then(r => {
-        const pending = r.data.rows || []
-        // Fetch processing orders claimed by THIS staff
+        const pending: PendingOrder[] = r.data.rows || []
         client.get('/tuka/order/list', { params: { status: 'processing', pageSize: 50 } })
           .then(r2 => {
             const allProcessing = r2.data.rows || []
@@ -70,10 +72,25 @@ export default function PendingOrdersPopup({
             )
             const combined = [...pending, ...myProcessing]
             setRows(combined)
-            // Auto-show popup when new orders arrive
-            if (combined.length > 0) setVisible(true)
+
+            if (forceShow) {
+              // Explicit reopen (new alert or FAB click)
+              setVisible(true)
+              suppressAutoOpen.current = false
+              lastPendingCount.current = pending.length
+            } else if (!suppressAutoOpen.current && pending.length > lastPendingCount.current) {
+              // New unclaimed orders arrived that weren't there before — reopen
+              setVisible(true)
+              lastPendingCount.current = pending.length
+            } else {
+              // Just update counts silently — don't reopen if staff closed it
+              lastPendingCount.current = pending.length
+            }
           })
-          .catch(() => setRows(pending))
+          .catch(() => {
+            setRows(pending)
+            lastPendingCount.current = pending.length
+          })
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -95,8 +112,7 @@ export default function PendingOrdersPopup({
   // Auto-open when new order alert fires
   useEffect(() => {
     if (newOrderAlert) {
-      load()
-      setVisible(true)
+      load(true)
       onAlertDismissed?.()
     }
   }, [newOrderAlert]) // eslint-disable-line
@@ -105,6 +121,8 @@ export default function PendingOrdersPopup({
     setClaiming(orderId)
     try {
       await client.put('/tuka/order/audit', { id: orderId, status: 'processing', verifyRemark: '' })
+      suppressAutoOpen.current = true
+      setVisible(false)
       load()
       onOrderClaimed?.()
     } catch (e: any) {
@@ -134,7 +152,7 @@ export default function PendingOrdersPopup({
       {!visible && (
         <button
           className="pp-global-fab"
-          onClick={() => { load(); setVisible(true) }}
+          onClick={() => { suppressAutoOpen.current = false; load(true) }}
         >
           待受理订单
           {(globalPendingCount > 0 || pendingCount > 0) && (
@@ -145,7 +163,10 @@ export default function PendingOrdersPopup({
 
       {/* Popup */}
       {visible && (
-        <div className="pp-global-overlay" onClick={() => setVisible(false)}>
+        <div className="pp-global-overlay" onClick={() => {
+          suppressAutoOpen.current = true
+          setVisible(false)
+        }}>
           <div className="pp-global-popup" onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="pp-global-header">
@@ -158,7 +179,10 @@ export default function PendingOrdersPopup({
                     {processingCount > 0 && `${processingCount} 我的处理中`}
                   </span>
                 )}
-                <button className="pp-global-close" onClick={() => setVisible(false)}>✕</button>
+                <button className="pp-global-close" onClick={() => {
+                  suppressAutoOpen.current = true
+                  setVisible(false)
+                }}>✕</button>
               </div>
             </div>
 
