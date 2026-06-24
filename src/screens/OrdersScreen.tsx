@@ -381,7 +381,19 @@ export default function OrdersScreen({
                   <div className="action-btns">
                     {/* 查看数据: show to claimer + super admin for active orders, everyone for completed */}
                     {(r.status === 'paid' || r.status === 'rejected' || canEditOrder(r) || r.status === 'pending') && (
-                      <button className="act-btn blue" onClick={() => { setVerifyData(r); setEditingNewAmount(String(r.newAmount ?? r.ngnAmount ?? '')); setAuditRemark(''); setAuditImgFile(null); setAdjustedAmount('') }}>查看数据</button>
+                      <button className="act-btn blue" onClick={() => {
+                        setVerifyData(r)
+                        // Initialize edit field with newAmount only if it's a valid positive override,
+                        // otherwise fall back to the actual ngnAmount
+                        const existingNew = r.newAmount != null ? parseFloat(String(r.newAmount)) : NaN
+                        const initAmt = (!isNaN(existingNew) && existingNew > 0)
+                          ? String(existingNew)
+                          : String(r.ngnAmount ?? '')
+                        setEditingNewAmount(initAmt)
+                        setAuditRemark('')
+                        setAuditImgFile(null)
+                        setAdjustedAmount('')
+                      }}>查看数据</button>
                     )}
                     <button className="act-btn green" onClick={() => setCardData(r)}>查看</button>
                     {/* Status badge only — audit actions moved inside 查看数据 modal */}
