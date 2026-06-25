@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Required for tauri-action to create GitHub Releases
+permissions:
+  contents: write
+
 jobs:
   # ── Build on each platform ──────────────────────────────────────────────────
   build:
