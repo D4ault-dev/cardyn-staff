@@ -1,0 +1,146 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #app { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #f0f2f5; color: #303133;
+  -webkit-font-smoothing: antialiased;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Page container — fills content area, flex column ── */
+.app-container {
+  display: flex; flex-direction: column;
+  height: 100%; overflow: hidden; background: #f0f2f5;
+}
+
+/* ── Toolbar row ── */
+.tuka-toolbar {
+  display: flex; align-items: center; gap: 6px;
+  background: #fff; padding: 8px 12px;
+  border-bottom: 1px solid #e4e7ed;
+  flex-shrink: 0; flex-wrap: nowrap; overflow-x: auto;
+}
+
+/* ── Table wrapper — scrollable ── */
+.el-table-wrapper,
+.app-container > .el-table,
+.app-container > .tuka-table-wrap {
+  flex: 1; overflow: auto; min-height: 0;
+}
+
+/* ── Pagination bar ── */
+.page-footer {
+  display: flex; justify-content: center; align-items: center;
+  padding: 10px 0; background: #fff;
+  border-top: 1px solid #e4e7ed; flex-shrink: 0;
+}
+
+/* ── Info bar (order dialogs) ── */
+.info-row-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+  background: #f5f7fa; border: 1px solid #e8e8e8; border-radius: 4px;
+  padding: 8px 12px; margin-bottom: 12px;
+}
+.info-bar-label { font-size: 13px; color: #666; margin-right: 8px; white-space: nowrap; }
+.info-bar-item {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid #e8e8e8; border-radius: 3px; background: #fff;
+  padding: 4px 10px; font-size: 13px;
+}
+.ibl { color: #999; margin-right: 4px; }
+.ibv { color: #333; font-weight: 500; }
+
+/* ── Form rows (dialogs) ── */
+.form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.form-row.align-top { align-items: flex-start; }
+.form-label { font-size: 13px; color: #666; white-space: nowrap; min-width: 72px; text-align: right; flex-shrink: 0; }
+.form-inline-label { font-size: 13px; color: #666; white-space: nowrap; flex-shrink: 0; }
+
+/* ── Status badges ── */
+.tag-pending    { background:#fff7e6; color:#d46b08; border:1px solid #ffd591; border-radius:3px; padding:1px 7px; font-size:11px; font-weight:600; white-space:nowrap; }
+.tag-processing { background:#e6f4ff; color:#0958d9; border:1px solid #91caff; border-radius:3px; padding:1px 7px; font-size:11px; font-weight:600; }
+.tag-paid       { background:#f6ffed; color:#389e0d; border:1px solid #b7eb8f; border-radius:3px; padding:1px 7px; font-size:11px; font-weight:600; }
+.tag-completed  { background:#f6ffed; color:#389e0d; border:1px solid #b7eb8f; border-radius:3px; padding:1px 7px; font-size:11px; font-weight:600; }
+.tag-rejected   { background:#fff1f0; color:#cf1322; border:1px solid #ffccc7; border-radius:3px; padding:1px 7px; font-size:11px; font-weight:600; }
+
+/* ── Amount colors ── */
+.amount-green { color: #52c41a; font-weight: 600; }
+.amount-red   { color: #ff4d4f; font-weight: 600; }
+.amount-blue  { color: #1677ff; font-weight: 600; }
+
+/* ── Element Plus overrides — compact style ── */
+.el-table th.el-table__cell {
+  background: #f5f7fa !important;
+  color: #606266 !important;
+  font-weight: 600;
+  padding: 8px 0 !important;
+}
+.el-table td.el-table__cell { padding: 5px 0 !important; }
+
+/* Toolbar: compact buttons + inputs */
+.tuka-toolbar .el-button {
+  height: 28px !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+  border-radius: 3px !important;
+}
+.tuka-toolbar .el-button.is-circle { width: 28px !important; padding: 0 !important; }
+.tuka-toolbar .el-select .el-input__wrapper,
+.tuka-toolbar .el-input__wrapper { height: 28px !important; }
+.tuka-toolbar .el-date-editor { height: 28px !important; }
+
+/* Table: extra compact action buttons */
+.el-table .el-button {
+  padding: 2px 7px !important;
+  font-size: 12px !important;
+  height: 24px !important;
+  border-radius: 3px !important;
+  margin: 0 2px !important;
+}
+
+/* ── Login page ── */
+.login-page {
+  display: flex; flex-direction: column;
+  min-height: 100vh;
+  background: #f0f2f5;
+}
+.login-card {
+  background: #fff; border-radius: 12px; padding: 40px 36px;
+  width: 400px; box-shadow: 0 4px 24px rgba(0,0,0,.1);
+  border: 1px solid #e4e7ed;
+}
+.login-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.login-logo-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #1677ff, #00C2B4);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 900; color: #fff;
+}
+.login-logo-name { font-size: 18px; font-weight: 800; color: #303133; }
+.login-sub { font-size: 13px; color: #909399; margin-bottom: 24px; }
+.login-form { display: flex; flex-direction: column; gap: 12px; }
+.login-btn { width: 100%; }
+.login-error { color: #f56c6c; font-size: 12px; text-align: center; }
+
+/* ── Toast notifications ── */
+.toast-wrap {
+  position: fixed; bottom: 24px; right: 24px;
+  display: flex; flex-direction: column; gap: 10px;
+  z-index: 9999; pointer-events: none;
+}
+
+/* ── Force all routed views to fill the content area ── */
+.staff-content { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+.staff-content > * { flex: 1; min-height: 0; overflow: hidden; }
+
+/* chat-shell fills its container */
+.chat-shell { height: 100% !important; }
+
+/* app-container fills its container */
+.app-container { height: 100% !important; }
