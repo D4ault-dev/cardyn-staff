@@ -4,9 +4,16 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
   background: #f0f2f5; color: #303133;
   -webkit-font-smoothing: antialiased;
-  font-size: 13px;
+  font-size: 14px;
   overflow: hidden;
 }
+
+/* ── Global Element Plus table overrides — bigger text, taller rows ── */
+.el-table { font-size: 13px !important; }
+.el-table th.el-table__cell { font-size: 13px !important; padding: 10px 0 !important; }
+.el-table td.el-table__cell { padding: 8px 0 !important; font-size: 13px !important; }
+.el-button--small { font-size: 12px !important; padding: 5px 10px !important; }
+.el-tag--small { font-size: 12px !important; padding: 2px 8px !important; }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }

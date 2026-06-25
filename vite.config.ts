@@ -67,6 +67,10 @@ export default defineConfig(async () => {
     build: {
       outDir: 'dist',
       chunkSizeWarningLimit: 1500,
+      // Don't externalize Tauri plugin packages — they resolve at runtime in the Tauri webview
+      rollupOptions: {
+        external: [],
+      },
     },
   }
 })

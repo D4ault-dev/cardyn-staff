@@ -21,11 +21,11 @@
 
     <!-- 表格 -->
     <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
-    <el-table v-loading="loading" :data="list" border size="small"
-      :header-cell-style="{background:'#f5f7fa',color:'#606266',padding:'8px 0'}"
-      :cell-style="{padding:'5px 0'}" style="width:100%" height="100%">
-      <el-table-column label="ID"      prop="id"         width="60"  align="center" fixed />
-      <el-table-column label="用户"    prop="username"   width="90" />
+    <el-table v-loading="loading" :data="list" border
+      style="width:100%" height="100%">
+      <el-table-column label="ID"      prop="id"         width="55"  align="center" fixed />
+      <el-table-column label="用户ID"  prop="userId"     width="70"  align="center" />
+      <el-table-column label="用户名"  prop="username"   min-width="90" show-overflow-tooltip />
       <el-table-column label="提现编号" width="160" fixed>
         <template #default="{ row }">
           <span style="font-family:monospace;font-size:12px">{{ row.withdrawNo }}</span>
@@ -55,14 +55,16 @@
         <template #default="{ row }">
           <el-image v-if="row.receiptImage" :src="authImg(row.receiptImage)"
             style="width:32px;height:32px;border-radius:3px;cursor:pointer"
-            fit="cover" :preview-src-list="[authImg(row.receiptImage)]" />
+            fit="cover"
+            :preview-src-list="[authImg(row.receiptImage)]"
+            preview-teleported />
           <span v-else style="color:#bbb">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="处理人" width="90" align="center">
+      <el-table-column label="处理人" min-width="90" align="center">
         <template #default="{ row }">
           <span v-if="row.staffName"
-            :style="{ fontSize:'11px', fontWeight:600, color: Number(row.staffId)===Number(userStore.userId) ? '#1677ff' : '#606266' }">
+            :style="{ fontSize:'12px', fontWeight:600, color: Number(row.staffId)===Number(userStore.userId) ? '#1677ff' : '#606266' }">
             {{ row.staffName }}
           </span>
           <span v-else style="color:#bbb;font-size:11px">—</span>
@@ -101,7 +103,7 @@
     <!-- 分页 -->
     <div class="page-footer">
       <el-pagination v-model:current-page="q.pageNum" v-model:page-size="q.pageSize"
-        :total="total" :page-sizes="[10,20,50]"
+        :total="total" :page-sizes="[20,50,100]"
         layout="total, sizes, prev, pager, next" @change="getList" />
     </div>
 
@@ -124,7 +126,7 @@
       <div v-if="cur.receiptImage" style="margin-top:14px">
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">付款收据</div>
         <el-image :src="authImg(cur.receiptImage)" style="max-width:200px;border-radius:6px"
-          fit="contain" :preview-src-list="[authImg(cur.receiptImage)]" />
+          fit="contain" :preview-src-list="[authImg(cur.receiptImage)]" preview-teleported />
       </div>
       <template #footer><el-button @click="viewOpen=false">关 闭</el-button></template>
     </el-dialog>
@@ -155,11 +157,25 @@
       </div>
       <el-form label-width="70px">
         <el-form-item label="付款收据">
-          <el-upload action="#" :auto-upload="false" :on-change="onReceiptChange" :show-file-list="false" accept="image/*">
-            <el-button size="small">上传收据</el-button>
-          </el-upload>
-          <img v-if="receiptPreview" :src="receiptPreview"
-            style="width:70px;height:70px;object-fit:cover;border-radius:4px;margin-top:6px;display:block" />
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <!-- Upload area — click or drag, same as orders page -->
+            <el-upload action="#" :auto-upload="false" :show-file-list="false"
+              accept="image/*" drag style="width:140px"
+              :on-change="f => { receiptFile = f.raw; receiptPreview = URL.createObjectURL(f.raw) }">
+              <div v-if="receiptPreview" style="position:relative;width:140px;height:100px">
+                <img :src="receiptPreview" style="width:140px;height:100px;object-fit:cover;border-radius:4px" />
+                <button
+                  style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center"
+                  @click.prevent="receiptFile=null;receiptPreview=''">✕</button>
+              </div>
+              <div v-else style="padding:16px;text-align:center">
+                <div style="font-size:22px;color:#1677ff;margin-bottom:4px">📤</div>
+                <div style="font-size:12px;color:#606266;font-weight:500">上传收据</div>
+                <div style="font-size:11px;color:#bbb;margin-top:2px">支持拖拽</div>
+              </div>
+            </el-upload>
+            <el-button size="small" @click="pasteReceipt">点击粘贴图片</el-button>
+          </div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="payForm.remark" type="textarea" :rows="2" placeholder="可选" />
@@ -209,7 +225,7 @@ const loading = ref(false)
 const dateRange = ref([])
 const pendingCount = ref(0)
 
-const q = ref({ pageNum:1, pageSize:10, status:'', username:'', startTime:'', endTime:'' })
+const q = ref({ pageNum:1, pageSize:20, status:'', username:'', startTime:'', endTime:'' })
 
 const statusType  = { pending:'warning', completed:'success', approved:'success', rejected:'danger', processing:'primary' }
 const statusLabel = { pending:'待处理', completed:'已完成', approved:'已批准', rejected:'已拒绝', processing:'处理中' }
@@ -269,6 +285,24 @@ function openPay(row) { payForm.value = { ...row, remark:'' }; receiptFile.value
 function openReject(row) { rejectForm.value = { id:row.id, username:row.username||row.userId, amount:row.amount, remark:'' }; rejectOpen.value = true }
 
 function onReceiptChange(file) { receiptFile.value = file.raw; receiptPreview.value = URL.createObjectURL(file.raw) }
+
+async function pasteReceipt() {
+  try {
+    const items = await navigator.clipboard.read()
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          const blob = await item.getType(type)
+          receiptFile.value = new File([blob], 'paste.png', { type })
+          receiptPreview.value = URL.createObjectURL(blob)
+          ElMessage.success('图片已粘贴')
+          return
+        }
+      }
+    }
+    ElMessage.warning('剪贴板中没有图片')
+  } catch { ElMessage.warning('无法读取剪贴板，请使用上传按钮') }
+}
 
 // Claim a pending withdrawal — atomic, same pattern as orders
 async function claimWithdrawal(row) {
@@ -341,12 +375,34 @@ async function fetchPendingCount() {
 function copy(text) { navigator.clipboard.writeText(text).then(() => ElMessage.success('已复制')) }
 
 let listTimer = null
+let _cleanup  = null
 onMounted(() => {
   getList(); fetchPendingCount()
-  // Silent background refresh every 10s
+  // Ctrl+V paste when pay dialog is open
+  function handlePaste(e) {
+    if (!payOpen.value) return
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile()
+        if (file) {
+          receiptFile.value = file
+          receiptPreview.value = URL.createObjectURL(file)
+          ElMessage.success('图片已粘贴')
+        }
+        break
+      }
+    }
+  }
+  window.addEventListener('paste', handlePaste)
   listTimer = setInterval(() => { if (!document.hidden) silentRefresh() }, 10_000)
+  _cleanup = () => {
+    window.removeEventListener('paste', handlePaste)
+    if (listTimer) clearInterval(listTimer)
+  }
 })
-onUnmounted(() => { if (listTimer) clearInterval(listTimer) })
+onUnmounted(() => { if (_cleanup) _cleanup() })
 </script>
 
 <style scoped>

@@ -136,13 +136,14 @@
               <template v-else>
                 <div class="input-toolbar">
                   <el-upload action="#" :auto-upload="false" :on-change="sendImage" :show-file-list="false" accept="image/*">
-                    <el-button size="small" text title="发送图片">
+                    <el-button size="small" text title="发送图片（或 Ctrl+V 粘贴）">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                         <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
                         <polyline points="21 15 16 10 5 21"/>
                       </svg>
                     </el-button>
                   </el-upload>
+                  <span style="font-size:11px;color:#bbb;margin-left:4px">Ctrl+V 粘贴图片</span>
                 </div>
                 <div class="input-row">
                   <el-input v-model="inputText" type="textarea" :rows="3"
@@ -268,6 +269,7 @@ const msgCache    = new Map()
 let sessTimer = null
 let pollTimer = null
 let sessInFlight = false
+let _chatPasteHandler = null
 
 const tabs = [
   { l: '全部', v: '' },
@@ -422,11 +424,16 @@ async function sendMsg() {
   finally { sending.value = false }
 }
 
-async function sendImage(file) {
+async function sendImage(fileOrEvent) {
   if (!active.value || !canReply.value) return
-  const fd = new FormData(); fd.append('sessionId', String(active.value.id)); fd.append('file', file.raw)
+  // Accept el-upload file object OR raw File
+  const rawFile = fileOrEvent?.raw || fileOrEvent
+  if (!rawFile || !(rawFile instanceof File)) return
+  const fd = new FormData()
+  fd.append('sessionId', String(active.value.id))
+  fd.append('file', rawFile)
   try {
-    const res = await request({ url: '/tuka/chat/admin/replyImage', method: 'post', data: fd, headers: { 'Content-Type': 'multipart/form-data' } })
+    const res = await request({ url: '/tuka/chat/admin/replyImage', method: 'post', data: fd })
     messages.value.push(res.data); lastId.value = res.data.id; scrollBottom()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -451,8 +458,33 @@ async function handleClose() {
 onMounted(() => {
   loadSessions()
   sessTimer = setInterval(loadSessions, 15_000)
+
+  // Ctrl+V paste image directly into chat
+  function handleChatPaste(e) {
+    if (!active.value || !canReply.value) return
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile()
+        if (file) {
+          e.preventDefault()
+          sendImage(file)
+          ElMessage.success('图片已发送')
+        }
+        break
+      }
+    }
+  }
+  window.addEventListener('paste', handleChatPaste)
+  // store for cleanup
+  _chatPasteHandler = handleChatPaste
 })
-onUnmounted(() => { stopPoll(); if (sessTimer) clearInterval(sessTimer) })
+onUnmounted(() => {
+  stopPoll()
+  if (sessTimer) clearInterval(sessTimer)
+  if (_chatPasteHandler) window.removeEventListener('paste', _chatPasteHandler)
+})
 </script>
 
 <style scoped>

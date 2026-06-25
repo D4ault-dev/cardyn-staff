@@ -1,0 +1,565 @@
+// 账号操作模块
+import type { Account } from '../types'
+import { accountStore } from '../store'
+import { openFloatingProgress } from '../utils/floating-progress'
+
+function isSuspendedError(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return (
+    message.includes('封禁') ||
+    message.includes('暂停') ||
+    normalized.includes('suspended') ||
+    normalized.includes('access_denied')
+  )
+}
+
+/**
+ * 刷新账号信息
+ */
+export async function refreshAccount(account: Account, silent: boolean = false): Promise<void> {
+  if (!account.credentials.refreshToken || !account.credentials.clientId || !account.credentials.clientSecret) {
+    if (!silent) window.UI?.toast.error('账号缺少刷新凭证')
+    throw new Error('账号缺少刷新凭证')
+  }
+
+  if (!silent) window.UI?.toast.info(`正在刷新账号: ${account.email}`)
+
+  try {
+    const result = await (window as any).__TAURI__.core.invoke('verify_account_credentials', {
+      refreshToken: account.credentials.refreshToken,
+      clientId: account.credentials.clientId,
+      clientSecret: account.credentials.clientSecret,
+      region: account.credentials.region || 'us-east-1',
+      authMethod: account.credentials.authMethod || 'IdC',
+      provider: account.credentials.provider || account.idp
+    })
+
+    if (result.success && result.data) {
+      const now = Date.now()
+      accountStore.updateAccount(account.id, {
+        email: result.data.email,
+        userId: result.data.user_id,
+        credentials: {
+          ...account.credentials,
+          accessToken: result.data.access_token,
+          refreshToken: result.data.refresh_token,
+          expiresAt: now + (result.data.expires_in || 3600) * 1000
+        },
+        subscription: {
+          type: result.data.subscription_type,
+          title: result.data.subscription_title,
+          rawType: result.data.raw_type,
+          upgradeCapability: result.data.upgrade_capability,
+          overageCapability: result.data.overage_capability,
+          managementTarget: result.data.management_target,
+          daysRemaining: result.data.days_remaining
+        },
+        usage: {
+          current: result.data.usage.current,
+          limit: result.data.usage.limit,
+          percentUsed: result.data.usage.current / result.data.usage.limit,
+          lastUpdated: now,
+          nextResetDate: result.data.usage.nextResetDate,
+          baseLimit: result.data.usage.baseLimit,
+          baseCurrent: result.data.usage.baseCurrent,
+          freeTrialLimit: result.data.usage.freeTrialLimit,
+          freeTrialCurrent: result.data.usage.freeTrialCurrent,
+          freeTrialExpiry: result.data.usage.freeTrialExpiry,
+          resourceDetail: result.data.usage.resourceDetail
+        },
+        status: 'active',
+        lastError: undefined,
+        lastUsedAt: now
+      })
+
+      if (!silent) window.UI?.toast.success('账号刷新成功')
+      } else {
+        // 根据错误类型设置状态
+        const errorMsg = result.error || '刷新失败'
+        const isSuspended = isSuspendedError(errorMsg)
+
+      accountStore.updateAccount(account.id, {
+        status: isSuspended ? 'suspended' : 'error',
+        lastError: errorMsg
+      })
+
+      // 如果账号被封禁，删除机器码绑定
+      if (isSuspended) {
+        try {
+          const { removeAccountBinding } = await import('../handlers/machine-id-storage')
+          removeAccountBinding(account.id)
+          console.log(`[账号刷新] 账号 ${account.email} 已封禁，已删除机器码绑定`)
+        } catch (error) {
+          console.error('[账号刷新] 删除机器码绑定失败:', error)
+        }
+      }
+
+      // 只抛出错误，不显示 toast（由调用方决定是否显示）
+      throw new Error(errorMsg)
+    }
+  } catch (error) {
+    // 只抛出错误，不显示 toast（由调用方决定是否显示）
+    throw error
+  }
+}
+
+/**
+ * 只刷新 Token（不更新账号信息）
+ */
+export async function refreshTokenOnly(account: Account): Promise<void> {
+  if (!account.credentials.refreshToken || !account.credentials.clientId || !account.credentials.clientSecret) {
+    throw new Error('账号缺少刷新凭证')
+  }
+
+  try {
+    const result = await (window as any).__TAURI__.core.invoke('verify_account_credentials', {
+      refreshToken: account.credentials.refreshToken,
+      clientId: account.credentials.clientId,
+      clientSecret: account.credentials.clientSecret,
+      region: account.credentials.region || 'us-east-1',
+      authMethod: account.credentials.authMethod || 'IdC',
+      provider: account.credentials.provider || account.idp
+    })
+
+    if (result.success && result.data) {
+      const now = Date.now()
+      // 只更新 Token 相关信息
+      accountStore.updateAccount(account.id, {
+        credentials: {
+          ...account.credentials,
+          accessToken: result.data.access_token,
+          refreshToken: result.data.refresh_token,
+          expiresAt: now + (result.data.expires_in || 3600) * 1000
+        },
+        status: 'active',
+        lastError: undefined
+      })
+    } else {
+      const errorMsg = result.error || '刷新失败'
+      const isSuspended = isSuspendedError(errorMsg)
+
+      accountStore.updateAccount(account.id, {
+        status: isSuspended ? 'suspended' : 'error',
+        lastError: errorMsg
+      })
+
+      // 如果账号被封禁，删除机器码绑定
+      if (isSuspended) {
+        try {
+          const { removeAccountBinding } = await import('../handlers/machine-id-storage')
+          removeAccountBinding(account.id)
+          console.log(`[Token刷新] 账号 ${account.email} 已封禁，已删除机器码绑定`)
+        } catch (error) {
+          console.error('[Token刷新] 删除机器码绑定失败:', error)
+        }
+      }
+
+      throw new Error(errorMsg)
+    }
+  } catch (error) {
+    throw error
+  }
+}
+
+/**
+ * 删除账号
+ */
+export async function deleteAccount(accountId: string, onDelete?: (accountId: string) => void): Promise<void> {
+  const accounts = accountStore.getAccounts()
+  const account = accounts.find(a => a.id === accountId)
+  if (!account) return
+
+  // 检查是否为当前激活账号
+  const activeAccountId = accountStore.getActiveAccountId()
+  const isActiveAccount = activeAccountId === accountId
+  
+  // 使用应用内模态框
+  const message = isActiveAccount
+    ? `账号 ${account.email} 是当前激活账号，删除后需要重新登录。确定要删除吗？`
+    : `确定要删除账号 ${account.email} 吗？`
+  
+  const modal = window.UI?.modal.open({
+    title: '确认删除',
+    html: `
+      <div style="padding: 24px;">
+        <p style="margin: 0; color: var(--text-main); font-size: 14px;">${message}</p>
+      </div>
+    `,
+    footer: `
+      <button class="ui-btn ui-btn-secondary" onclick="window.cancelDeleteAccount()">取消</button>
+      <button class="ui-btn ui-btn-danger" onclick="window.confirmDeleteAccount()">删除</button>
+    `
+  })
+  
+  // 注册全局函数
+  ;(window as any).cancelDeleteAccount = () => {
+    window.UI?.modal.close(modal)
+    delete (window as any).cancelDeleteAccount
+    delete (window as any).confirmDeleteAccount
+  }
+  
+  ;(window as any).confirmDeleteAccount = async () => {
+    window.UI?.modal.close(modal)
+    delete (window as any).cancelDeleteAccount
+    delete (window as any).confirmDeleteAccount
+    
+    // 如果是激活账号，先退出登录
+    if (isActiveAccount) {
+      try {
+        await (window as any).__TAURI__.core.invoke('logout_account')
+        await accountStore.syncActiveAccountFromLocal()
+      } catch (error) {
+        console.error('[删除账号] 退出登录失败:', error)
+      }
+    }
+    
+    accountStore.deleteAccount(accountId)
+    if (onDelete) {
+      onDelete(accountId)
+    }
+    window.UI?.toast.success('账号已删除')
+  }
+}
+
+/**
+ * 批量检查账号状态
+ */
+export async function handleBatchCheck(selectedIds: Set<string>): Promise<void> {
+  const selectedAccounts = accountStore.getAccounts().filter(a => selectedIds.has(a.id))
+
+  if (selectedAccounts.length === 0) {
+    window.UI?.toast.warning('请先选择要检查的账号')
+    return
+  }
+
+
+  window.UI?.toast.info(`正在检查 ${selectedAccounts.length} 个账号状态...`)
+
+  let successCount = 0
+  let failedCount = 0
+  let completedCount = 0
+  const checkProgress = openFloatingProgress({
+    id: 'batch-check',
+    title: '正在检查账号状态',
+    total: selectedAccounts.length,
+    detail: `0/${selectedAccounts.length} 已完成`
+  })
+
+  // 并发控制：每次最多10个并发请求（后端 ListAvailableModels + GetUsageLimits 已并发）
+  const batchSize = 10
+  for (let i = 0; i < selectedAccounts.length; i += batchSize) {
+    const batch = selectedAccounts.slice(i, i + batchSize)
+    await Promise.all(batch.map(async (account) => {
+      try {
+        if (!account.credentials.refreshToken || !account.credentials.clientId || !account.credentials.clientSecret) {
+          failedCount++
+          accountStore.updateAccount(account.id, { status: 'error', lastError: '缺少凭证信息' })
+          return
+        }
+
+        // 只验证凭证是否有效，不更新详细信息
+        const result = await (window as any).__TAURI__.core.invoke('verify_account_credentials', {
+          refreshToken: account.credentials.refreshToken,
+          clientId: account.credentials.clientId,
+          clientSecret: account.credentials.clientSecret,
+          region: account.credentials.region || 'us-east-1',
+          authMethod: account.credentials.authMethod || 'IdC',
+          provider: account.credentials.provider || account.idp
+        })
+
+        if (result.success) {
+          accountStore.updateAccount(account.id, {
+            status: 'active',
+            lastError: undefined
+          })
+          successCount++
+        } else {
+          const errorMsg = result.error || '验证失败'
+          const isSuspended = isSuspendedError(errorMsg)
+
+          accountStore.updateAccount(account.id, {
+            status: isSuspended ? 'suspended' : 'error',
+            lastError: errorMsg
+          })
+
+          // 如果账号被封禁，删除机器码绑定
+          if (isSuspended) {
+            try {
+              const { removeAccountBinding } = await import('../handlers/machine-id-storage')
+              removeAccountBinding(account.id)
+              console.log(`[批量检查] 账号 ${account.email} 已封禁，已删除机器码绑定`)
+            } catch (error) {
+              console.error('[批量检查] 删除机器码绑定失败:', error)
+            }
+          }
+
+          failedCount++
+        }
+      } catch (error) {
+        accountStore.updateAccount(account.id, {
+          status: 'error',
+          lastError: (error as Error).message
+        })
+        failedCount++
+      } finally {
+        completedCount++
+        checkProgress.update({
+          completed: completedCount,
+          total: selectedAccounts.length,
+          detail: `正常 ${successCount} 个，异常 ${failedCount} 个`
+        })
+      }
+    }))
+  }
+
+  if (failedCount === 0) {
+    checkProgress.finish(`检查完成：${successCount} 个账号状态正常`, 'success')
+    window.UI?.toast.success(`检查完成：${successCount} 个账号状态正常`)
+  } else {
+    checkProgress.finish(`检查完成：${successCount} 个正常，${failedCount} 个异常`, 'warning')
+    window.UI?.toast.warning(`检查完成：${successCount} 个正常，${failedCount} 个异常`)
+  }
+
+  accountStore.notifyAccountsChanged()
+}
+
+/**
+ * 批量刷新账号
+ */
+export async function handleBatchRefresh(selectedIds: Set<string>): Promise<void> {
+  const selectedAccounts = accountStore.getAccounts().filter(a => selectedIds.has(a.id))
+
+  if (selectedAccounts.length === 0) {
+    window.UI?.toast.warning('请先选择要刷新的账号')
+    return
+  }
+
+
+  window.UI?.toast.info(`正在刷新 ${selectedAccounts.length} 个账号...`)
+
+  let successCount = 0
+  let failedCount = 0
+  let completedCount = 0
+  const refreshProgress = openFloatingProgress({
+    id: 'batch-refresh',
+    title: '正在刷新账号',
+    total: selectedAccounts.length,
+    detail: `0/${selectedAccounts.length} 已完成`
+  })
+
+  // 并发控制：每次最多10个并发请求
+  const batchSize = 10
+  for (let i = 0; i < selectedAccounts.length; i += batchSize) {
+    const batch = selectedAccounts.slice(i, i + batchSize)
+    await Promise.all(batch.map(async (account) => {
+      try {
+        await refreshAccount(account, true)
+        successCount++
+      } catch (error) {
+        failedCount++
+      } finally {
+        completedCount++
+        refreshProgress.update({
+          completed: completedCount,
+          total: selectedAccounts.length,
+          detail: `成功 ${successCount} 个，失败 ${failedCount} 个`
+        })
+      }
+    }))
+  }
+
+  if (failedCount === 0) {
+    refreshProgress.finish(`刷新完成：${successCount} 个账号已更新`, 'success')
+    window.UI?.toast.success(`刷新完成：${successCount} 个账号已更新`)
+  } else {
+    refreshProgress.finish(`刷新完成：${successCount} 个成功，${failedCount} 个失败`, 'warning')
+    window.UI?.toast.warning(`刷新完成：${successCount} 个成功，${failedCount} 个失败`)
+  }
+
+  accountStore.notifyAccountsChanged()
+}
+
+/**
+ * 批量删除账号
+ */
+export function handleBatchDelete(selectedIds: Set<string>, onClear: () => void): void {
+  const selectedCount = selectedIds.size
+
+  if (selectedCount === 0) {
+    window.UI?.toast.warning('请先选择要删除的账号')
+    return
+  }
+
+  // 使用应用内模态框
+  const modal = window.UI?.modal.open({
+    title: '确认批量删除',
+    html: `
+      <div style="padding: 24px;">
+        <p style="margin: 0; color: var(--text-main); font-size: 14px;">
+          确定要删除选中的 ${selectedCount} 个账号吗？此操作不可恢复。
+        </p>
+      </div>
+    `,
+    footer: `
+      <button class="ui-btn ui-btn-secondary" onclick="window.cancelBatchDelete()">取消</button>
+      <button class="ui-btn ui-btn-danger" onclick="window.confirmBatchDelete()">删除</button>
+    `
+  })
+  
+  // 注册全局函数
+  ;(window as any).cancelBatchDelete = () => {
+    window.UI?.modal.close(modal)
+    delete (window as any).cancelBatchDelete
+    delete (window as any).confirmBatchDelete
+  }
+  
+  ;(window as any).confirmBatchDelete = () => {
+    window.UI?.modal.close(modal)
+    delete (window as any).cancelBatchDelete
+    delete (window as any).confirmBatchDelete
+    
+    selectedIds.forEach(id => {
+      accountStore.deleteAccount(id)
+    })
+    onClear()
+    window.UI?.toast.success(`已删除 ${selectedCount} 个账号`)
+  }
+}
+
+/**
+ * 切换到指定账号
+ */
+export async function switchToAccount(account: Account): Promise<void> {
+  const { credentials } = account
+
+  // 检查账号状态
+  if (account.status === 'suspended') {
+    window.UI?.toast.error('无法切换到已封禁的账号')
+    throw new Error('账号已封禁')
+  }
+
+  if (account.status === 'error') {
+    const confirm = window.confirm('该账号状态异常，是否尝试刷新后再切换？')
+    if (confirm) {
+      try {
+        await refreshTokenOnly(account)
+        // 重新获取更新后的账号
+        const accounts = accountStore.getAccounts()
+        const updatedAccount = accounts.find(a => a.id === account.id)
+        if (updatedAccount) {
+          account = updatedAccount
+        }
+      } catch (error) {
+        window.UI?.toast.error('刷新失败，无法切换')
+        throw error
+      }
+    } else {
+      throw new Error('账号状态异常')
+    }
+  }
+
+  // 检查凭证完整性
+  if (!credentials.refreshToken) {
+    window.UI?.toast.error('账号凭证不完整，无法切换')
+    throw new Error('账号凭证不完整')
+  }
+
+  if (credentials.authMethod !== 'social' && (!credentials.clientId || !credentials.clientSecret)) {
+    window.UI?.toast.error('账号凭证不完整，无法切换')
+    throw new Error('账号凭证不完整')
+  }
+
+  // 检查 Token 是否即将过期（5分钟内）
+  const now = Date.now()
+  if (credentials.expiresAt && credentials.expiresAt - now < 5 * 60 * 1000) {
+    console.log('[切换账号] Token 即将过期，先刷新')
+    try {
+      await refreshTokenOnly(account)
+      // 重新获取更新后的账号
+      const accounts = accountStore.getAccounts()
+      const updatedAccount = accounts.find(a => a.id === account.id)
+      if (updatedAccount) {
+        account = updatedAccount
+      }
+    } catch (error) {
+      console.error('[切换账号] Token 刷新失败:', error)
+      // 继续尝试切换，让后端处理过期问题
+    }
+  }
+
+  window.UI?.toast.info(`正在切换到账号: ${account.email}`)
+
+  try {
+    // 先尝试应用机器码（如果启用了自动更换）
+    try {
+      const { applyMachineIdForAccount } = await import('../handlers/machine-id-events')
+      const applied = await applyMachineIdForAccount(account.id)
+      if (applied) {
+        console.log('[切换账号] 已应用机器码')
+      }
+    } catch (error) {
+      console.log('[切换账号] 应用机器码失败，继续切换:', error)
+    }
+    
+    const result = await (window as any).__TAURI__.core.invoke('switch_account', {
+      accessToken: account.credentials.accessToken,
+      refreshToken: account.credentials.refreshToken,
+      clientId: account.credentials.clientId || '',
+      clientSecret: account.credentials.clientSecret || '',
+      region: account.credentials.region || 'us-east-1',
+      startUrl: account.credentials.startUrl,
+      authMethod: account.credentials.authMethod || 'IdC',
+      provider: account.credentials.provider || account.idp
+    })
+
+    if (result.success) {
+      // 如果后端返回了新的 Token，更新账号
+      if (result.access_token && result.access_token !== account.credentials.accessToken) {
+        console.log('[切换账号] 后端返回了新 Token，更新账号')
+        accountStore.updateAccount(account.id, {
+          credentials: {
+            ...account.credentials,
+            accessToken: result.access_token,
+            refreshToken: result.refresh_token || account.credentials.refreshToken,
+            expiresAt: result.expires_in ? now + result.expires_in * 1000 : account.credentials.expiresAt
+          }
+        })
+      }
+      
+      // 立即同步本地激活账号
+      await accountStore.syncActiveAccountFromLocal()
+      window.UI?.toast.success('账号切换成功')
+    } else {
+      window.UI?.toast.error(`切换失败: ${result.error}`)
+      throw new Error(result.error || '切换失败')
+    }
+  } catch (error) {
+    window.UI?.toast.error('切换失败: ' + (error as Error).message)
+    throw error
+  }
+}
+
+/**
+ * 退出登录
+ */
+export async function logoutAccount(): Promise<void> {
+  if (!confirm('这将清除本地 SSO 缓存并退出 Kiro 登录，是否继续？')) {
+    return
+  }
+
+  try {
+    const result = await (window as any).__TAURI__.core.invoke('logout_account')
+
+    if (result.success) {
+      // 立即同步本地激活账号（应该会清除）
+      await accountStore.syncActiveAccountFromLocal()
+      window.UI?.toast.success('退出成功，已清除本地缓存')
+    } else {
+      window.UI?.toast.error(`退出失败: ${result.error}`)
+      throw new Error(result.error || '退出失败')
+    }
+  } catch (error) {
+    window.UI?.toast.error('退出失败: ' + (error as Error).message)
+    throw error
+  }
+}

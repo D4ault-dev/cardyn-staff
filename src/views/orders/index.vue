@@ -27,10 +27,15 @@
 
     <!-- 表格 -->
     <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
-    <el-table v-loading="loading" :data="list" border size="small"
+    <el-table v-loading="loading" :data="list" border
       style="width:100%" height="100%">
-      <el-table-column label="id"         prop="id"     width="60"  align="center" fixed />
-      <el-table-column label="用户id"     prop="userId" width="75"  align="center" />
+      <el-table-column label="id"         prop="id"     width="55"  align="center" fixed />
+      <el-table-column label="用户id"     prop="userId" width="70"  align="center" />
+      <el-table-column label="用户名" min-width="100" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span style="font-size:13px">{{ row.userNameDisplay || row.username || '—' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="核销订单号" width="170" fixed>
         <template #default="{ row }">
           <span style="font-family:monospace;font-size:12px">{{ row.orderNo }}</span>
@@ -52,10 +57,10 @@
           <span style="color:#ff4d4f;font-weight:700">₦{{ fmt(row.ngnAmount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="处理人" width="90" align="center">
+      <el-table-column label="处理人" min-width="90" align="center">
         <template #default="{ row }">
           <span v-if="row.staffName"
-            :style="{ fontSize:'11px', fontWeight:600, color: Number(row.staffId)===Number(userStore.userId) ? '#1677ff' : '#606266' }">
+            :style="{ fontSize:'12px', fontWeight:600, color: Number(row.staffId)===Number(userStore.userId) ? '#1677ff' : '#606266' }">
             {{ row.staffName }}
           </span>
           <span v-else style="color:#bbb;font-size:11px">—</span>
@@ -97,7 +102,7 @@
     <!-- 分页 -->
     <div class="page-footer">
       <el-pagination v-model:current-page="q.pageNum" v-model:page-size="q.pageSize"
-        :total="total" :page-sizes="[10,20,50]"
+        :total="total" :page-sizes="[20,50,100]"
         layout="total, sizes, prev, pager, next" @change="getList" />
     </div>
 
@@ -395,7 +400,7 @@ const total      = ref(0)
 const loading    = ref(false)
 const countries  = ref([])
 const dateRange  = ref([])
-const q = ref({ pageNum:1, pageSize:10, status:'', country:'', orderNo:'', userSearch:'', startTime:'', endTime:'' })
+const q = ref({ pageNum:1, pageSize:20, status:'', country:'', orderNo:'', userSearch:'', startTime:'', endTime:'' })
 
 const dataOpen      = ref(false)
 const cardOpen      = ref(false)

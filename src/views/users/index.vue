@@ -68,7 +68,7 @@
         v-model:current-page="q.pageNum"
         v-model:page-size="q.pageSize"
         :total="total"
-        :page-sizes="[10, 20, 50]"
+        :page-sizes="[20, 50, 100]"
         layout="total, sizes, prev, pager, next"
         @change="getList"
       />
@@ -227,7 +227,7 @@ const list      = ref([])
 const total     = ref(0)
 const loading   = ref(false)
 const dateRange = ref([])
-const q = ref({ pageNum: 1, pageSize: 10, userSearch: '', startTime: '', endTime: '' })
+const q = ref({ pageNum: 1, pageSize: 20, userSearch: '', startTime: '', endTime: '' })
 
 async function getList() {
   loading.value = true
