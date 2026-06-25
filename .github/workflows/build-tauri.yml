@@ -10,7 +10,6 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build on each platform ──────────────────────────────────────────────────
   build:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -18,9 +17,7 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            artifact_name: cardyn-staff-macos
           - os: windows-latest
-            artifact_name: cardyn-staff-windows
 
     steps:
       - uses: actions/checkout@v4
@@ -28,13 +25,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Rust cache
+      - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
@@ -42,7 +39,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Tauri app
+      - name: Build Tauri app + create GitHub Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,34 +48,11 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'Cardyn Staff v__VERSION__'
-          releaseBody: |
-            ## Cardyn Staff v__VERSION__
-
-            Built from commit ${{ github.sha }}
-
-            ### Downloads
-            - **Windows** — `.exe` installer below
-            - **macOS** — `.dmg` installer below
-
-            ### Auto-update
-            Existing installs will be notified and updated automatically.
+          releaseBody: 'Cardyn Staff v__VERSION__ — download the installer for your platform below.'
           releaseDraft: false
           prerelease: false
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/macos/*.app.tar.gz
-            src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
-          retention-days: 7
-          if-no-files-found: warn
-
-  # ── Upload installers to server for auto-update ────────────────────────────
+  # Upload installers to cardyn.net server for auto-update
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -87,28 +61,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get version from tauri.conf.json
+      - name: Get version
         id: version
         run: |
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: cardyn-staff-macos
-          path: release-files/
+      - name: Wait for release assets to be available
+        run: sleep 30
 
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: cardyn-staff-windows
-          path: release-files/
+      - name: Download release assets from GitHub
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release-files
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release download "v$VERSION" --dir release-files --skip-existing || true
+          ls -la release-files/
 
-      - name: List release files
-        run: ls -la release-files/ || echo "No files found"
-
-      - name: Upload installers to server
+      - name: Upload to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -129,37 +100,30 @@ jobs:
             VERSION="${{ steps.version.outputs.version }}"
             DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
 
-            # Find built files
-            WIN_NSIS=$(ls Cardyn*.exe 2>/dev/null | head -1)
-            WIN_SIG=$(ls Cardyn*.exe.sig 2>/dev/null | head -1)
-            MAC_DMG=$(ls Cardyn*.dmg 2>/dev/null | head -1)
-            MAC_TAR=$(ls Cardyn*.app.tar.gz 2>/dev/null | head -1)
-            MAC_SIG=$(ls Cardyn*.app.tar.gz.sig 2>/dev/null | head -1)
+            WIN_FILE=$(ls *_${VERSION}_x64-setup.exe 2>/dev/null | head -1 || ls *.exe 2>/dev/null | head -1 || echo "")
+            WIN_SIG=$(ls *.exe.sig 2>/dev/null | head -1 || echo "")
+            MAC_FILE=$(ls *.app.tar.gz 2>/dev/null | head -1 || echo "")
+            MAC_SIG=$(ls *.app.tar.gz.sig 2>/dev/null | head -1 || echo "")
 
-            # Build the Tauri updater JSON
             cat > tauri-latest.json << ENDJSON
             {
               "version": "$VERSION",
-              "notes": "Cardyn Staff v$VERSION — improvements and bug fixes",
+              "notes": "Cardyn Staff v$VERSION",
               "pub_date": "$DATE",
               "platforms": {
                 "windows-x86_64": {
                   "signature": "$(cat $WIN_SIG 2>/dev/null || echo '')",
-                  "url": "https://cardyn.net/downloads/$WIN_NSIS"
-                },
-                "darwin-x86_64": {
-                  "signature": "$(cat $MAC_SIG 2>/dev/null || echo '')",
-                  "url": "https://cardyn.net/downloads/$MAC_TAR"
+                  "url": "https://cardyn.net/downloads/$WIN_FILE"
                 },
                 "darwin-aarch64": {
                   "signature": "$(cat $MAC_SIG 2>/dev/null || echo '')",
-                  "url": "https://cardyn.net/downloads/$MAC_TAR"
+                  "url": "https://cardyn.net/downloads/$MAC_FILE"
+                },
+                "darwin-x86_64": {
+                  "signature": "$(cat $MAC_SIG 2>/dev/null || echo '')",
+                  "url": "https://cardyn.net/downloads/$MAC_FILE"
                 }
               }
             }
             ENDJSON
-
-            echo "=== tauri-latest.json ==="
-            cat tauri-latest.json
-            echo "=== Downloads dir ==="
-            ls -la
+            echo "=== tauri-latest.json ===" && cat tauri-latest.json
