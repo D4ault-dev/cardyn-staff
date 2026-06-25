@@ -162,7 +162,7 @@ const initials  = computed(() => (userStore.nickName || userStore.username || 'S
 
 const isMaximized   = ref(false)
 // Read version from Tauri or fallback to package.json version
-const appVersion    = ref('2.1.0')
+const appVersion    = ref('2.2.0')
 // Update state machine — same as Staff Desktop UpdateBanner
 const updateState    = ref('idle') // idle | checking | downloading | ready | up-to-date | error
 const updateNewVer   = ref('')
