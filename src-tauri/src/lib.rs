@@ -13,6 +13,8 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
+            // Open DevTools for debugging — remove after image issue is fixed
+            window.open_devtools();
             tauri::async_runtime::spawn(async move {
                 if let Ok(Some(pos)) = window::load_window_position().await {
                     if pos.x > -32000 && pos.y > -32000 {
