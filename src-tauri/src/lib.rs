@@ -13,7 +13,6 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
-            // Open DevTools — enabled via devtools feature for debugging
             #[cfg(feature = "devtools")]
             window.open_devtools();
             tauri::async_runtime::spawn(async move {
