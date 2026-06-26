@@ -13,14 +13,19 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
-            // Clear WebView2 cache on startup — fixes stale 403 cached responses on Windows
+
+            // Open DevTools in devtools builds for debugging
             #[cfg(feature = "devtools")]
             window.open_devtools();
-            let win2 = window.clone();
+
+            // Restore window position, clear stale cache, then show window
             tauri::async_runtime::spawn(async move {
-                // Clear browsing data to remove any cached 403 responses
-                let _ = win2.eval("if(window.caches){caches.keys().then(k=>k.forEach(n=>caches.delete(n)))}");
-            });
+                // Clear WebView2 cache — removes stale 403 cached image responses on Windows
+                let _ = window.eval(
+                    "if(window.caches){caches.keys().then(k=>k.forEach(n=>caches.delete(n)))}"
+                );
+
+                // Restore saved position
                 if let Ok(Some(pos)) = window::load_window_position().await {
                     if pos.x > -32000 && pos.y > -32000 {
                         let _ = window.set_position(PhysicalPosition::new(pos.x, pos.y));
@@ -30,9 +35,11 @@ pub fn run() {
                 } else {
                     let _ = window.center();
                 }
+
                 tokio::time::sleep(tokio::time::Duration::from_millis(80)).await;
                 let _ = window.show();
             });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
