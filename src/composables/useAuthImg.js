@@ -1,53 +1,18 @@
 /**
  * useAuthImg — resolves backend image URLs for Tauri (Windows + macOS).
  *
- * Dev: strips origin → relative path → Vite proxy handles CORS + auth
- * Production: fetches image via axios (which sets Authorization header)
- *   and returns a blob: URL — avoids CORS issues in Tauri WebView2 on Windows.
+ * Dev: strips origin → relative path → Vite proxy handles it
+ * Production: returns full https://api.cardyn.net URL
  *
- * Blob URLs are cached to avoid re-fetching the same image.
+ * Cache busting: adds ?v=<timestamp> in production to bypass
+ * Edge WebView2's stale HTTP cache (which served old 403 responses).
+ * The bust token changes daily so images re-validate once per day.
  */
-
-import { ref } from 'vue'
-import axios from 'axios'
-import Cookies from 'js-cookie'
 
 const IS_DEV = import.meta.env.DEV
 
-// Cache: original URL → blob URL
-const _blobCache = new Map()
-// Track in-flight fetches to avoid duplicates
-const _inflight = new Map()
-
-function getToken() {
-  return Cookies.get('staff_token') || ''
-}
-
-async function fetchBlob(url) {
-  if (_blobCache.has(url)) return _blobCache.get(url)
-  if (_inflight.has(url)) return _inflight.get(url)
-
-  const promise = (async () => {
-    try {
-      const token = getToken()
-      const res = await axios.get(url, {
-        responseType: 'blob',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        timeout: 15000,
-      })
-      const blobUrl = URL.createObjectURL(res.data)
-      _blobCache.set(url, blobUrl)
-      return blobUrl
-    } catch {
-      return url // fallback to original URL if fetch fails
-    } finally {
-      _inflight.delete(url)
-    }
-  })()
-
-  _inflight.set(url, promise)
-  return promise
-}
+// Daily cache buster — changes once per day so WebView2 re-fetches stale cached responses
+const CACHE_BUST = Math.floor(Date.now() / (1000 * 60 * 60 * 24))
 
 export function useAuthImg() {
   function authImg(url) {
@@ -63,34 +28,21 @@ export function useAuthImg() {
       return `/profile/upload/${url}`
     }
 
-    // Production — return full URL (used as src initially)
-    // For el-image, the URL will work because img-src allows https:
-    // But for preview (lightbox) on Windows, we use the blob approach below
-    if (url.startsWith('https://api.cardyn.net')) return url
-    if (url.startsWith('/')) return `https://api.cardyn.net${url}`
-    return url
-  }
-
-  // Reactive blob URL — use this for images that need to open in lightbox/preview
-  // Usage: const { blobUrl, loadBlob } = useAuthImgBlob(url)
-  function useReactiveBlob(rawUrl) {
-    const blobUrl = ref(authImg(rawUrl))
-    if (!IS_DEV && rawUrl && rawUrl.startsWith('https://')) {
-      fetchBlob(rawUrl).then(b => { blobUrl.value = b })
+    // Production — return full URL with daily cache buster
+    // This forces Edge WebView2 to re-fetch instead of serving old 403 from disk cache
+    let fullUrl
+    if (url.startsWith('https://api.cardyn.net')) {
+      fullUrl = url
+    } else if (url.startsWith('/')) {
+      fullUrl = `https://api.cardyn.net${url}`
+    } else {
+      fullUrl = `https://api.cardyn.net/profile/upload/${url}`
     }
-    return blobUrl
+
+    // Add cache buster — avoids stale 403 cached by Edge WebView2
+    const sep = fullUrl.includes('?') ? '&' : '?'
+    return `${fullUrl}${sep}v=${CACHE_BUST}`
   }
 
-  return { authImg, useReactiveBlob }
-}
-
-// Simple helper for non-reactive use — returns a promise
-export async function resolveImgBlob(url) {
-  if (!url) return ''
-  if (url.startsWith('blob:') || url.startsWith('data:')) return url
-  if (IS_DEV) {
-    if (url.startsWith('https://api.cardyn.net')) return url.replace('https://api.cardyn.net', '')
-    return url
-  }
-  return fetchBlob(url)
+  return { authImg }
 }
