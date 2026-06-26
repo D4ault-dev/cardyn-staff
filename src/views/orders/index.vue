@@ -164,7 +164,17 @@
         </span>
       </div>
 
-      <!-- 卡片代码 and 卡片图片 are NOT shown in 核销数据 — they live in 卡片数据 only -->
+      <!-- 卡片图片 — user uploaded card images, shown in 核销数据 so staff can verify -->
+      <div v-if="cur.cardImage" class="form-row" style="align-items:flex-start">
+        <label class="form-label">卡片图片：</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+          <el-image v-for="(img,i) in cur.cardImage.split(',').filter(u=>u.trim())" :key="i"
+            :src="authImg(img.trim())"
+            style="width:100px;height:100px;border-radius:4px;cursor:pointer;border:1px solid #e8e8e8;flex-shrink:0"
+            fit="cover" preview-teleported
+            :preview-src-list="cur.cardImage.split(',').map(u=>authImg(u.trim()))" />
+        </div>
+      </div>
 
       <!-- 备注信息 — editable textarea when active & claimer, readonly otherwise -->
       <div class="form-row" style="align-items:flex-start">
