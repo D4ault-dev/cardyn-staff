@@ -67,29 +67,92 @@ jobs:
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Wait for release assets to be available
-        run: sleep 30
+      - name: Wait for all release assets (build jobs take ~15min)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Waiting for v$VERSION release assets..."
+          # Wait up to 20 minutes for all 4 expected files to appear
+          # (.exe + .exe.sig + .app.tar.gz + .app.tar.gz.sig)
+          for i in $(seq 1 40); do
+            ASSET_COUNT=$(gh release view "v$VERSION" --json assets --jq '.assets | length' 2>/dev/null || echo 0)
+            echo "Attempt $i: $ASSET_COUNT assets found"
+            if [ "$ASSET_COUNT" -ge 8 ]; then
+              echo "All assets ready"
+              break
+            fi
+            sleep 30
+          done
+          gh release view "v$VERSION" --json assets --jq '.assets[].name'
 
-      - name: Download release assets from GitHub
+      - name: Download all release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p release-files
           VERSION="${{ steps.version.outputs.version }}"
-          gh release download "v$VERSION" --dir release-files --skip-existing || true
-          ls -la release-files/
+          gh release download "v$VERSION" --dir release-files
+          echo "=== Downloaded files ==="
+          ls -lah release-files/
 
-      - name: Upload to server
+      - name: Build tauri-latest.json
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          cd release-files
+
+          # Windows NSIS installer + sig
+          WIN_FILE=$(ls Cardyn*_${VERSION}_x64-setup.exe 2>/dev/null | head -1 || echo "")
+          WIN_SIG=$(cat "${WIN_FILE}.sig" 2>/dev/null || echo "")
+
+          # macOS aarch64 updater bundle + sig
+          MAC_ARM_FILE=$(ls Cardyn*_aarch64.app.tar.gz 2>/dev/null | head -1 || echo "")
+          MAC_ARM_SIG=$(cat "${MAC_ARM_FILE}.sig" 2>/dev/null || echo "")
+
+          # macOS x64 updater bundle + sig (may not exist if only arm build)
+          MAC_X64_FILE=$(ls Cardyn*_x64.app.tar.gz 2>/dev/null | head -1 || echo "$MAC_ARM_FILE")
+          MAC_X64_SIG=$(cat "${MAC_X64_FILE}.sig" 2>/dev/null || echo "$MAC_ARM_SIG")
+
+          echo "WIN:      $WIN_FILE"
+          echo "WIN SIG:  ${WIN_SIG:0:30}..."
+          echo "MAC ARM:  $MAC_ARM_FILE"
+          echo "MAC SIG:  ${MAC_ARM_SIG:0:30}..."
+
+          cat > ../tauri-latest.json << ENDJSON
+          {
+            "version": "$VERSION",
+            "notes": "Cardyn Staff v$VERSION",
+            "pub_date": "$DATE",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "$WIN_SIG",
+                "url": "https://cardyn.net/downloads/$WIN_FILE"
+              },
+              "darwin-aarch64": {
+                "signature": "$MAC_ARM_SIG",
+                "url": "https://cardyn.net/downloads/$MAC_ARM_FILE"
+              },
+              "darwin-x86_64": {
+                "signature": "$MAC_X64_SIG",
+                "url": "https://cardyn.net/downloads/$MAC_X64_FILE"
+              }
+            }
+          }
+          ENDJSON
+          echo "=== tauri-latest.json ===" && cat ../tauri-latest.json
+
+      - name: Upload installers to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "release-files/*"
+          source: "release-files/Cardyn*,tauri-latest.json"
           target: "/www/wwwroot/cardyn.net/downloads/"
           strip_components: 1
 
-      - name: Generate tauri-latest.json on server
+      - name: Clean old versions on server (keep only last 2)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -97,45 +160,11 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /www/wwwroot/cardyn.net/downloads
-            VERSION="${{ steps.version.outputs.version }}"
-            DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-
-            # Windows — NSIS installer (.exe) + its .sig
-            WIN_FILE=$(ls Cardyn*_${VERSION}_x64-setup.exe 2>/dev/null | head -1 || ls *_x64-setup.exe 2>/dev/null | head -1 || echo "")
-            WIN_SIG_FILE="${WIN_FILE}.sig"
-            WIN_SIG=$(cat "$WIN_SIG_FILE" 2>/dev/null || echo "")
-
-            # macOS — app tarball (.app.tar.gz) + its .sig — prefer aarch64
-            MAC_FILE=$(ls Cardyn*_aarch64.app.tar.gz 2>/dev/null | head -1 || ls *.app.tar.gz 2>/dev/null | head -1 || echo "")
-            MAC_SIG_FILE="${MAC_FILE}.sig"
-            MAC_SIG=$(cat "$MAC_SIG_FILE" 2>/dev/null || echo "")
-
-            MAC_X64_FILE=$(ls Cardyn*_x64.app.tar.gz 2>/dev/null | head -1 || echo "$MAC_FILE")
-            MAC_X64_SIG=$(cat "${MAC_X64_FILE}.sig" 2>/dev/null || echo "$MAC_SIG")
-
-            echo "WIN: $WIN_FILE (sig: $(echo $WIN_SIG | cut -c1-20)...)"
-            echo "MAC aarch64: $MAC_FILE (sig: $(echo $MAC_SIG | cut -c1-20)...)"
-            echo "MAC x64: $MAC_X64_FILE"
-
-            cat > tauri-latest.json << ENDJSON
-            {
-              "version": "$VERSION",
-              "notes": "Cardyn Staff v$VERSION",
-              "pub_date": "$DATE",
-              "platforms": {
-                "windows-x86_64": {
-                  "signature": "$WIN_SIG",
-                  "url": "https://cardyn.net/downloads/$WIN_FILE"
-                },
-                "darwin-aarch64": {
-                  "signature": "$MAC_SIG",
-                  "url": "https://cardyn.net/downloads/$MAC_FILE"
-                },
-                "darwin-x86_64": {
-                  "signature": "$MAC_X64_SIG",
-                  "url": "https://cardyn.net/downloads/$MAC_X64_FILE"
-                }
-              }
-            }
-            ENDJSON
+            # Keep only the 2 most recent versions — delete everything older
+            ls -t Cardyn.Staff_*.exe 2>/dev/null | tail -n +3 | xargs -r rm -f
+            ls -t Cardyn.Staff_*.dmg 2>/dev/null | tail -n +3 | xargs -r rm -f
+            ls -t Cardyn.Staff_*.msi 2>/dev/null | tail -n +3 | xargs -r rm -f
+            ls -t Cardyn.Staff_*.app.tar.gz 2>/dev/null | tail -n +3 | xargs -r rm -f
+            ls -t Cardyn.Staff_*.sig 2>/dev/null | tail -n +3 | xargs -r rm -f
+            echo "=== Current downloads ===" && ls -lah
             echo "=== tauri-latest.json ===" && cat tauri-latest.json
