@@ -1,18 +1,13 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import ElementPlus from 'element-plus'
+// Do NOT import all of ElementPlus here — tree-shaking via unplugin-vue-components
+// handles auto-importing only the components actually used. Full import adds ~600KB.
 import 'element-plus/dist/index.css'
 import App from './App.vue'
-import router from './router'
+import router from './router/index.js'
 import './styles/index.css'
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
-// Set preview-teleported globally so el-image previews are never clipped by parent containers
-app.use(ElementPlus, {
-  components: {
-    ElImage: { previewTeleported: true }
-  }
-})
 app.mount('#app')

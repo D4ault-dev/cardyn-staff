@@ -82,7 +82,9 @@
         <!-- ── Tab 1: 基本信息 ── -->
         <el-tab-pane label="基本信息" name="info">
           <div v-if="cur.avatar" style="text-align:center;margin-bottom:16px">
-            <el-avatar :src="cur.avatar" :size="64" />
+            <LazyImg :src="cur.avatar" :width="64" :height="64"
+              fit="cover" :preview="true"
+              style="border-radius:50%;margin:0 auto;display:block" root-margin="800px" />
           </div>
           <el-descriptions :column="2" border size="small">
             <el-descriptions-item label="用户ID">{{ cur.userId }}</el-descriptions-item>
@@ -212,6 +214,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import request from '@/utils/request'
+import LazyImg from '@/components/LazyImg.vue'
 const router = useRouter()
 
 // ── Status maps ───────────────────────────────────────────────────────────────

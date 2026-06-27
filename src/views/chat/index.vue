@@ -31,7 +31,10 @@
           :class="['session-row', active?.id === s.id && 'session-row-active']"
           @click="openSession(s)">
           <div class="sess-avatar" :style="{ background: avatarColor(s.userName) }">
-            <img v-if="s.userAvatar" :src="s.userAvatar" class="sess-avatar-img" />
+            <LazyImg v-if="s.userAvatar" :src="s.userAvatar"
+              :width="38" :height="38"
+              fit="cover" style="border-radius:50%;position:absolute;inset:0"
+              root-margin="500px" />
             <span v-else>{{ (s.userName || 'U')[0].toUpperCase() }}</span>
             <span v-if="s.unreadCount > 0 && s.status !== 'closed'" class="sess-badge">
               {{ s.unreadCount > 99 ? '99+' : s.unreadCount }}
@@ -68,7 +71,9 @@
         <div class="chat-header">
           <div class="chat-header-left">
             <div class="hdr-avatar" :style="{ background: avatarColor(active.userName) }">
-              <img v-if="active.userAvatar" :src="active.userAvatar" class="hdr-avatar-img" />
+              <LazyImg v-if="active.userAvatar" :src="active.userAvatar"
+                :width="34" :height="34" fit="cover"
+                style="border-radius:50%;position:absolute;inset:0" root-margin="800px" />
               <span v-else>{{ (active.userName || 'U')[0].toUpperCase() }}</span>
             </div>
             <div>
@@ -108,8 +113,11 @@
                   <div class="msg-content">
                     <div v-if="m.senderType !== 'agent'" class="msg-sender">{{ m.senderName }}</div>
                     <div v-if="m.msgType === 'image'" style="position:relative;display:inline-block">
-                      <el-image :src="authImg(m.content)"
-                        class="msg-img" fit="cover" :preview-src-list="[authImg(m.content)]" />
+                      <LazyImg :src="authImg(m.content)"
+                        :width="200" height="auto"
+                        fit="cover" :preview="true"
+                        style="border-radius:8px;cursor:pointer;display:block"
+                        root-margin="400px" />
                       <el-button size="mini" type="primary" plain
                         style="position:absolute;bottom:4px;right:4px;padding:2px 6px;font-size:10px;opacity:0.9"
                         @click.stop="copyImg(m.content)">复制</el-button>
@@ -192,6 +200,7 @@ import { useAuthImg } from '@/composables/useAuthImg'
 import { useUserStore } from '@/stores/user'
 import { usePermissions } from '@/composables/usePermissions'
 import { playNewMessage } from '@/utils/sound'
+import LazyImg from '@/components/LazyImg.vue'
 
 const { authImg } = useAuthImg()
 const userStore = useUserStore()

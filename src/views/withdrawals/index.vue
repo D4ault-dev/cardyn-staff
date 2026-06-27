@@ -53,11 +53,11 @@
       </el-table-column>
       <el-table-column label="收据"    width="70" align="center">
         <template #default="{ row }">
-          <el-image v-if="row.receiptImage" :src="authImg(row.receiptImage)"
-            style="width:32px;height:32px;border-radius:3px;cursor:pointer"
-            fit="cover"
-            :preview-src-list="[authImg(row.receiptImage)]"
-            preview-teleported />
+          <LazyImg v-if="row.receiptImage"
+            :src="authImg(row.receiptImage)"
+            :width="32" :height="32"
+            fit="cover" :preview="true"
+            style="border-radius:3px;cursor:pointer" />
           <span v-else style="color:#bbb">—</span>
         </template>
       </el-table-column>
@@ -214,6 +214,7 @@ import request, { clearCache } from '@/utils/request'
 import { usePermissions } from '@/composables/usePermissions'
 import { useAuthImg } from '@/composables/useAuthImg'
 import { useUserStore } from '@/stores/user'
+import LazyImg from '@/components/LazyImg.vue'
 
 const { canActWithdrawals } = usePermissions()
 const { authImg } = useAuthImg()

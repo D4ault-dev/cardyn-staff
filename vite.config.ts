@@ -29,13 +29,15 @@ export default defineConfig(async () => {
   return {
     plugins: [
       vue(),
+      // Auto-import Vue/Pinia composables — no manual imports needed
       AutoImport({
         imports: ['vue', 'vue-router', 'pinia'],
         resolvers: [ElementPlusResolver()],
         dts: false,
       }),
+      // Auto-import ElementPlus components on-demand — tree-shakes unused components
       Components({
-        resolvers: [ElementPlusResolver({ importStyle: false })],
+        resolvers: [ElementPlusResolver({ importStyle: 'css' })],
         dts: false,
       }),
     ],
@@ -51,14 +53,10 @@ export default defineConfig(async () => {
       hmr: host ? { protocol: 'ws', host, port: 1421 } : undefined,
       watch: { ignored: ['**/src-tauri/**'] },
       proxy: {
-        // API endpoints — need Origin header to pass nginx CORS check
         '/tuka':    makeProxy(),
         '/getInfo': makeProxy(),
         '/common':  makeProxy(),
         '/logout':  makeProxy(),
-        // Static file endpoints — images, uploads
-        // /profile/** is permitAll on backend — no auth token needed.
-        // Just set Origin header to pass nginx CORS check.
         '/profile': makeProxy(true),
         '/files':   makeProxy(true),
         '/upload':  makeProxy(true),
@@ -66,11 +64,32 @@ export default defineConfig(async () => {
     },
     build: {
       outDir: 'dist',
-      chunkSizeWarningLimit: 1500,
-      // Don't externalize Tauri plugin packages — they resolve at runtime in the Tauri webview
+      // Tauri apps run on localhost — can use modern targets safely
+      target: ['es2021', 'chrome100', 'safari15'],
+      minify: 'esbuild',
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         external: [],
+        output: {
+          // Split chunks so the browser (WebView2/WebKit) can cache each piece independently.
+          // Vue core, Element Plus, and app code load in parallel and are cached separately.
+          manualChunks(id) {
+            // Element Plus — large, changes rarely
+            if (id.includes('element-plus')) return 'element-plus'
+            // Vue ecosystem — vue, vue-router, pinia
+            if (id.includes('node_modules/vue') || id.includes('node_modules/@vue') ||
+                id.includes('node_modules/vue-router') || id.includes('node_modules/pinia')) {
+              return 'vue-vendor'
+            }
+            // Other node_modules
+            if (id.includes('node_modules')) return 'vendor'
+          },
+        },
       },
+    },
+    // Optimise deps so Vite pre-bundles them — faster cold start in dev
+    optimizeDeps: {
+      include: ['vue', 'vue-router', 'pinia', 'axios', 'element-plus', 'js-cookie', 'nprogress'],
     },
   }
 })

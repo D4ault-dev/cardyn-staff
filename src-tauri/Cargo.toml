@@ -1,6 +1,6 @@
 [package]
 name = "cardyn-staff"
-version = "2.5.2"
+version = "2.5.3"
 description = "Cardyn Staff Desktop App"
 authors = ["Cardyn"]
 edition = "2021"
