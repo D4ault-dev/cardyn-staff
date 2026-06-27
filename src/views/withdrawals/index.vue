@@ -53,11 +53,12 @@
       </el-table-column>
       <el-table-column label="收据"    width="70" align="center">
         <template #default="{ row }">
-          <LazyImg v-if="row.receiptImage"
+          <el-image v-if="row.receiptImage"
             :src="authImg(row.receiptImage)"
-            :width="32" :height="32"
-            fit="cover" :preview="true"
-            style="border-radius:3px;cursor:pointer" />
+            style="width:32px;height:32px;border-radius:3px;cursor:pointer;display:block"
+            fit="cover"
+            :preview-src-list="[authImg(row.receiptImage)]"
+            preview-teleported />
           <span v-else style="color:#bbb">—</span>
         </template>
       </el-table-column>

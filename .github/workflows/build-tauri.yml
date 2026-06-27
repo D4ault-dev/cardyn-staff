@@ -100,10 +100,22 @@ jobs:
             VERSION="${{ steps.version.outputs.version }}"
             DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
 
-            WIN_FILE=$(ls *_${VERSION}_x64-setup.exe 2>/dev/null | head -1 || ls *.exe 2>/dev/null | head -1 || echo "")
-            WIN_SIG=$(ls *.exe.sig 2>/dev/null | head -1 || echo "")
-            MAC_FILE=$(ls *.app.tar.gz 2>/dev/null | head -1 || echo "")
-            MAC_SIG=$(ls *.app.tar.gz.sig 2>/dev/null | head -1 || echo "")
+            # Windows — NSIS installer (.exe) + its .sig
+            WIN_FILE=$(ls Cardyn*_${VERSION}_x64-setup.exe 2>/dev/null | head -1 || ls *_x64-setup.exe 2>/dev/null | head -1 || echo "")
+            WIN_SIG_FILE="${WIN_FILE}.sig"
+            WIN_SIG=$(cat "$WIN_SIG_FILE" 2>/dev/null || echo "")
+
+            # macOS — app tarball (.app.tar.gz) + its .sig — prefer aarch64
+            MAC_FILE=$(ls Cardyn*_aarch64.app.tar.gz 2>/dev/null | head -1 || ls *.app.tar.gz 2>/dev/null | head -1 || echo "")
+            MAC_SIG_FILE="${MAC_FILE}.sig"
+            MAC_SIG=$(cat "$MAC_SIG_FILE" 2>/dev/null || echo "")
+
+            MAC_X64_FILE=$(ls Cardyn*_x64.app.tar.gz 2>/dev/null | head -1 || echo "$MAC_FILE")
+            MAC_X64_SIG=$(cat "${MAC_X64_FILE}.sig" 2>/dev/null || echo "$MAC_SIG")
+
+            echo "WIN: $WIN_FILE (sig: $(echo $WIN_SIG | cut -c1-20)...)"
+            echo "MAC aarch64: $MAC_FILE (sig: $(echo $MAC_SIG | cut -c1-20)...)"
+            echo "MAC x64: $MAC_X64_FILE"
 
             cat > tauri-latest.json << ENDJSON
             {
@@ -112,16 +124,16 @@ jobs:
               "pub_date": "$DATE",
               "platforms": {
                 "windows-x86_64": {
-                  "signature": "$(cat $WIN_SIG 2>/dev/null || echo '')",
+                  "signature": "$WIN_SIG",
                   "url": "https://cardyn.net/downloads/$WIN_FILE"
                 },
                 "darwin-aarch64": {
-                  "signature": "$(cat $MAC_SIG 2>/dev/null || echo '')",
+                  "signature": "$MAC_SIG",
                   "url": "https://cardyn.net/downloads/$MAC_FILE"
                 },
                 "darwin-x86_64": {
-                  "signature": "$(cat $MAC_SIG 2>/dev/null || echo '')",
-                  "url": "https://cardyn.net/downloads/$MAC_FILE"
+                  "signature": "$MAC_X64_SIG",
+                  "url": "https://cardyn.net/downloads/$MAC_X64_FILE"
                 }
               }
             }
