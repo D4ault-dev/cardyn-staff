@@ -54,9 +54,15 @@ export const useUserStore = defineStore('user', {
       try { await logout() } catch {}
       removeToken()
       Cookies.remove(ROLE_KEY)
-      this.token    = ''
-      this.roleType = ''
-      this.roles    = []
+      // Reset ALL state — must clear username/nickName/avatar/userId so the
+      // router guard's `if (!userStore.username)` triggers GetInfo() on next login
+      this.token       = ''
+      this.userId      = ''
+      this.username    = ''
+      this.nickName    = ''
+      this.avatar      = ''
+      this.roleType    = ''
+      this.roles       = []
       this.permissions = []
     }
   }
