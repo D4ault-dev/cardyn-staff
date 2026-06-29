@@ -16,8 +16,16 @@ function makeProxy(headers = true) {
   return {
     target: proxyTarget,
     changeOrigin: true,
-    secure: true,
+    secure: false,
     ...(headers ? { headers: proxyHeaders } : {}),
+    configure: (proxy, options) => {
+      proxy.on('error', (err, req, res) => {
+        console.log('Proxy error:', err);
+      });
+      proxy.on('proxyReq', (proxyReq, req, res) => {
+        console.log('Proxying:', req.method, req.url, '→', proxyTarget + req.url);
+      });
+    }
   }
 }
 

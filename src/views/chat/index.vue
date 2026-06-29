@@ -22,6 +22,11 @@
           </template>
         </el-input>
         <div v-if="initiateError" style="font-size:11px;color:#ff4d4f;padding:2px 2px 0">{{ initiateError }}</div>
+        <div class="keyboard-hints">
+          <span title="切换会话">↑↓</span>
+          <span title="快速搜索">⌘K</span>
+          <span title="关闭会话">Esc</span>
+        </div>
       </div>
       <!-- No filter tabs — show all sessions -->
 
@@ -275,10 +280,37 @@ const msgList     = ref(null)
 const lastId      = ref(0)
 const msgCache    = new Map()
 
+// ── LocalStorage persistence for chat history ────────────────────────────────
+const STORAGE_KEY = 'cardyn_chat_cache'
+const STORAGE_TTL = 3600_000 // 1 hour
+
+function loadChatFromStorage(sessionId) {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (!stored) return null
+    const cache = JSON.parse(stored)
+    const session = cache[sessionId]
+    if (!session || Date.now() - session.ts > STORAGE_TTL) return null
+    return { messages: session.messages, lastId: session.lastId }
+  } catch { return null }
+}
+
+function saveChatToStorage(sessionId, messages, lastId) {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    const cache = stored ? JSON.parse(stored) : {}
+    cache[sessionId] = { messages, lastId, ts: Date.now() }
+    // Keep only last 10 sessions to avoid storage bloat
+    const entries = Object.entries(cache).sort((a, b) => b[1].ts - a[1].ts).slice(0, 10)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)))
+  } catch {}
+}
+
 let sessTimer = null
 let pollTimer = null
 let sessInFlight = false
 let _chatPasteHandler = null
+let _chatKeyHandler = null
 
 const tabs = [
   { l: '全部', v: '' },
@@ -360,6 +392,22 @@ async function openSession(s) {
   active.value = { ...s }  // plain copy — ensures Vue reactivity triggers
   await nextTick()  // force DOM update before loading messages
   showProfile.value = false
+
+  // Try localStorage first for instant loading
+  const stored = loadChatFromStorage(s.id)
+  if (stored) {
+    messages.value = stored.messages
+    lastId.value = stored.lastId
+    msgCache.set(s.id, { messages: stored.messages, lastId: stored.lastId })
+    scrollBottom()
+    request({ url: `/tuka/chat/admin/mark-read/${s.id}`, method: 'post' }).catch(() => {})
+    startPoll(s.id)
+    // Load fresh data in background
+    loadMessagesInBackground(s.id)
+    return
+  }
+
+  // Try memory cache
   const cached = msgCache.get(s.id)
   if (cached) {
     messages.value = cached.messages
@@ -370,18 +418,20 @@ async function openSession(s) {
     startPoll(s.id)
     return
   }
+
+  // Fresh load
   messages.value = []; profile.value = null; lastId.value = 0; loadingMsg.value = true
   try {
     request({ url: `/tuka/chat/admin/mark-read/${s.id}`, method: 'post' }).catch(() => {})
     const res = await request({ url: `/tuka/chat/messages/${s.id}`, params: { pageSize: 100 } })
-    // request.js returns the full response body: { code:200, data:[...] }
-    // Staff Desktop uses r.data.data — same pattern here
     const msgList = Array.isArray(res) ? res
       : Array.isArray(res?.data) ? res.data
       : Array.isArray(res?.rows) ? res.rows
       : []
     messages.value = msgList
     lastId.value = messages.value.length ? messages.value[messages.value.length - 1].id : 0
+    msgCache.set(s.id, { messages: messages.value, lastId: lastId.value })
+    saveChatToStorage(s.id, messages.value, lastId.value)
     scrollBottom()
   } catch (e) {
     console.error('[chat] load messages failed', e)
@@ -390,6 +440,19 @@ async function openSession(s) {
     .then(r => { if (r.data) { profile.value = r.data; const c = msgCache.get(s.id); if (c) c.profile = r.data } })
     .catch(() => {})
   startPoll(s.id)
+}
+
+async function loadMessagesInBackground(sessionId) {
+  try {
+    const res = await request({ url: `/tuka/chat/messages/${sessionId}`, params: { pageSize: 100 } })
+    const msgList = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : Array.isArray(res?.rows) ? res.rows : []
+    if (active.value?.id === sessionId && msgList.length > messages.value.length) {
+      messages.value = msgList
+      lastId.value = msgList.length ? msgList[msgList.length - 1].id : lastId.value
+      msgCache.set(sessionId, { messages: messages.value, lastId: lastId.value, profile: profile.value })
+      saveChatToStorage(sessionId, messages.value, lastId.value)
+    }
+  } catch {}
 }
 
 function startPoll(sessionId) {
@@ -408,6 +471,8 @@ function startPoll(sessionId) {
           lastId.value = fresh[fresh.length - 1].id
           const c = msgCache.get(sessionId)
           if (c) { c.messages = messages.value; c.lastId = lastId.value }
+          // Save to localStorage for persistence
+          saveChatToStorage(sessionId, messages.value, lastId.value)
           // Play sound only for user messages, not our own replies
           const hasUserMsg = fresh.some(m => m.senderType !== 'staff' && m.senderType !== 'agent')
           if (hasUserMsg) playNewMessage()
@@ -417,7 +482,7 @@ function startPoll(sessionId) {
       if (data?.status && active.value)
         active.value = { ...active.value, status: data.status, agentId: data.agentId, agentName: data.agentName }
     } catch {}
-  }, 4000)
+  }, 8000)  // 8s polling - balanced for professional platform
 }
 function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null } }
 
@@ -486,13 +551,44 @@ onMounted(() => {
     }
   }
   window.addEventListener('paste', handleChatPaste)
-  // store for cleanup
   _chatPasteHandler = handleChatPaste
+
+  // ── Keyboard shortcuts for professional UX ──────────────────────────────────
+  function handleChatKeys(e) {
+    // Esc: Close active chat
+    if (e.key === 'Escape' && active.value) {
+      active.value = null
+      stopPoll()
+      return
+    }
+
+    // ↑/↓: Navigate sessions
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.target.matches('input, textarea')) {
+      e.preventDefault()
+      const list = filteredSessions.value
+      if (!list.length) return
+      const idx = active.value ? list.findIndex(s => s.id === active.value.id) : -1
+      let next = idx
+      if (e.key === 'ArrowUp') next = idx <= 0 ? list.length - 1 : idx - 1
+      else next = idx >= list.length - 1 ? 0 : idx + 1
+      openSession(list[next])
+      return
+    }
+
+    // Ctrl+K or Cmd+K: Focus search
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault()
+      document.querySelector('.sidebar-search input')?.focus()
+    }
+  }
+  window.addEventListener('keydown', handleChatKeys)
+  _chatKeyHandler = handleChatKeys
 })
 onUnmounted(() => {
   stopPoll()
   if (sessTimer) clearInterval(sessTimer)
   if (_chatPasteHandler) window.removeEventListener('paste', _chatPasteHandler)
+  if (_chatKeyHandler) window.removeEventListener('keydown', _chatKeyHandler)
 })
 </script>
 
@@ -703,4 +799,15 @@ onUnmounted(() => {
 .slide-profile-enter-active, .slide-profile-leave-active { transition: width .2s ease, opacity .2s ease; overflow: hidden; }
 .slide-profile-enter-from, .slide-profile-leave-to { width: 0; opacity: 0; }
 .slide-profile-enter-to, .slide-profile-leave-from { width: 220px; opacity: 1; }
+
+/* Keyboard shortcuts hint */
+.keyboard-hints {
+  display: flex; gap: 6px; padding: 4px 0 0; justify-content: flex-end;
+}
+.keyboard-hints span {
+  font-size: 9px; color: #bbb; background: #f5f5f5;
+  padding: 2px 5px; border-radius: 3px; font-family: monospace;
+  cursor: help; transition: all .15s;
+}
+.keyboard-hints span:hover { background: #e8e8e8; color: #666; }
 </style>

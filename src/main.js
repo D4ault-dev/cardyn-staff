@@ -6,8 +6,12 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router/index.js'
 import './styles/index.css'
+import { registerServiceWorker } from './utils/sw-register'
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.mount('#app')
+
+// Register service worker for offline support
+registerServiceWorker()

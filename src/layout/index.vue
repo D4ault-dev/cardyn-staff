@@ -47,7 +47,7 @@
         <!-- User info (logged-in staff only) -->
         <div class="topnav-user">
           <div class="topnav-avatar-lg" :style="{ background: '#1677ff' }">{{ initials }}</div>
-          <span class="topnav-username">{{ userStore.nickName || userStore.username }}</span>
+          <span class="topnav-username">{{ nickName || username }}</span>
         </div>
         <el-button size="small" type="danger" plain @click="handleLogout">退出</el-button>
         <!-- Window controls (Tauri frameless) -->
@@ -144,10 +144,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { storeToRefs } from 'pinia'
 import { useNotifications } from '@/composables/useNotifications'
 import ToastCard from '@/components/ToastCard.vue'
 import PendingOrdersPopup from '@/components/PendingOrdersPopup.vue'
@@ -158,11 +159,13 @@ import request from '@/utils/request'
 const route     = useRoute()
 const router    = useRouter()
 const userStore = useUserStore()
-const initials  = computed(() => (userStore.nickName || userStore.username || 'S')[0].toUpperCase())
+// Use storeToRefs to ensure reactivity across logout/login cycles
+const { nickName, username, userId } = storeToRefs(userStore)
+const initials  = computed(() => (nickName.value || username.value || 'S')[0].toUpperCase())
 
 const isMaximized   = ref(false)
 // Read version from Tauri or fallback to package.json version
-const appVersion    = ref('2.5.4')
+const appVersion    = ref('2.5.5')
 // Update state machine — same as Staff Desktop UpdateBanner
 const updateState    = ref('idle') // idle | checking | downloading | ready | up-to-date | error
 const updateNewVer   = ref('')
@@ -344,6 +347,20 @@ onMounted(() => {
     refreshOnline()
     onlineTimer = setInterval(refreshOnline, 10_000)
   }, 2000)
+})
+
+// Watch for user changes and reset component state when userId changes
+watch(userId, (newId, oldId) => {
+  if (oldId && newId && oldId !== newId) {
+    // User switched — reset badges and notifications
+    unread.value = 0
+    orderBadge.value = 0
+    wdBadge.value = 0
+    toasts.value = []
+    onlineStaff.value = []
+    // Refresh online staff list immediately for new user
+    refreshOnline()
+  }
 })
 
 // Notifications

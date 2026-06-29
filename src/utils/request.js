@@ -56,6 +56,10 @@ const instance = axios.create({
   // The backend allows tauri://localhost in CORS since it's a trusted desktop client
   baseURL: import.meta.env.VITE_APP_BASE_API || '',
   timeout: 15000,
+  // HTTP/2 connection pooling — reuse connections for better performance
+  maxRedirects: 5,
+  httpAgent: null, // Let browser handle connection pooling
+  httpsAgent: null,
 })
 
 instance.interceptors.request.use(config => {

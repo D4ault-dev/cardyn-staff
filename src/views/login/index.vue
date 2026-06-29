@@ -77,6 +77,8 @@ async function handleLogin() {
   error.value   = ''
   try {
     await userStore.Login(form.value.username, form.value.password)
+    // Fetch user info immediately after login to populate nickName/username
+    await userStore.GetInfo()
     const redirect = route.query.redirect || '/'
     router.push(redirect)
   } catch (e) {

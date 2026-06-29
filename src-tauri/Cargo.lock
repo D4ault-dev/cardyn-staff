@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "cardyn-staff"
-version = "2.5.2"
+version = "2.5.5"
 dependencies = [
  "dirs 5.0.1",
  "reqwest 0.12.28",

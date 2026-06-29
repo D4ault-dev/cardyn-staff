@@ -38,7 +38,7 @@ const props = defineProps({
   preview:    { type: Boolean,          default: false },
   // rootMargin — how far outside the viewport to start loading.
   // Use a large value (e.g. '600px') so images start fetching well before scroll.
-  rootMargin: { type: String,           default: '300px' },
+  rootMargin: { type: String,           default: '600px' },
 })
 
 // idle → not yet in/near viewport | loading → fetch started | loaded | error

@@ -73,8 +73,8 @@ export function useNotifications({ onChat, onOrder, onWithdrawal }) {
 
   // Run once immediately (after a short delay so the app finishes mounting)
   setTimeout(check, 3000)
-  // Poll every 30s — was 15s, reduces server load when connection is slow
-  timer = setInterval(check, 30_000)
+  // Poll every 15s — balanced between real-time updates and server load
+  timer = setInterval(check, 15_000)
 
   function stop() { if (timer) clearInterval(timer) }
   onUnmounted(stop)

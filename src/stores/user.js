@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { login, getInfo, logout } from '@/api/auth'
-import { setToken, removeToken, getToken } from '@/utils/request'
+import { setToken, removeToken, getToken, clearCache } from '@/utils/request'
 import Cookies from 'js-cookie'
 
 const ROLE_KEY = 'staff_role'
@@ -54,6 +54,8 @@ export const useUserStore = defineStore('user', {
       try { await logout() } catch {}
       removeToken()
       Cookies.remove(ROLE_KEY)
+      // Clear ALL cached API responses to prevent stale data on next login
+      clearCache()
       // Reset ALL state — must clear username/nickName/avatar/userId so the
       // router guard's `if (!userStore.username)` triggers GetInfo() on next login
       this.token       = ''
