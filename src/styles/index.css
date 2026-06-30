@@ -10,8 +10,8 @@ body {
 
 /* ── Global Element Plus table overrides — bigger text, taller rows ── */
 .el-table { font-size: 13px !important; }
-.el-table th.el-table__cell { font-size: 13px !important; padding: 10px 0 !important; }
-.el-table td.el-table__cell { padding: 8px 0 !important; font-size: 13px !important; }
+.el-table th.el-table__cell { font-size: 13px !important; padding: 10px 12px !important; }
+.el-table td.el-table__cell { padding: 8px 12px !important; font-size: 13px !important; }
 .el-button--small { font-size: 12px !important; padding: 5px 10px !important; }
 .el-tag--small { font-size: 12px !important; padding: 2px 8px !important; }
 
@@ -24,6 +24,8 @@ body {
 .app-container {
   display: flex; flex-direction: column;
   height: 100%; overflow: hidden; background: #f0f2f5;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
 /* ── Toolbar row ── */
@@ -31,21 +33,42 @@ body {
   display: flex; align-items: center; gap: 6px;
   background: #fff; padding: 8px 12px;
   border-bottom: 1px solid #e4e7ed;
+  border-radius: 6px 6px 0 0;
   flex-shrink: 0; flex-wrap: nowrap; overflow-x: auto;
 }
 
 /* ── Table wrapper — scrollable ── */
 .el-table-wrapper,
 .app-container > .el-table,
-.app-container > .tuka-table-wrap {
+.app-container > .tuka-table-wrap,
+.app-container > div > .el-table {
   flex: 1; overflow: auto; min-height: 0;
+  background: #fff;
+  border-left: 1px solid #e4e7ed;
+  border-right: 1px solid #e4e7ed;
+}
+
+/* Specific fix for nested table divs */
+.app-container > div:has(.el-table) {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #fff;
+  border-left: 1px solid #e4e7ed;
+  border-right: 1px solid #e4e7ed;
 }
 
 /* ── Pagination bar ── */
 .page-footer {
   display: flex; justify-content: center; align-items: center;
   padding: 10px 0; background: #fff;
-  border-top: 1px solid #e4e7ed; flex-shrink: 0;
+  border-top: 1px solid #e4e7ed;
+  border-radius: 0 0 6px 6px;
+  border-left: 1px solid #e4e7ed;
+  border-right: 1px solid #e4e7ed;
+  flex-shrink: 0;
 }
 
 /* ── Info bar (order dialogs) ── */
@@ -86,9 +109,9 @@ body {
   background: #f5f7fa !important;
   color: #606266 !important;
   font-weight: 600;
-  padding: 8px 0 !important;
+  padding: 10px 12px !important;
 }
-.el-table td.el-table__cell { padding: 5px 0 !important; }
+.el-table td.el-table__cell { padding: 8px 12px !important; }
 
 /* Toolbar: compact buttons + inputs */
 .tuka-toolbar .el-button {

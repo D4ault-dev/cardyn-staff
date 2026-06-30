@@ -22,23 +22,23 @@
     <!-- 表格 -->
     <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
     <el-table v-loading="loading" :data="list" border
-      style="width:100%" height="100%">
-      <el-table-column label="ID"      prop="id"         width="55"  align="center" fixed />
-      <el-table-column label="用户ID"  prop="userId"     width="70"  align="center" />
-      <el-table-column label="用户名"  prop="username"   min-width="90" show-overflow-tooltip />
-      <el-table-column label="提现编号" width="160" fixed>
+      style="width:100%" height="100%" stripe>
+      <el-table-column label="ID" prop="id" width="70" align="center" fixed sortable />
+      <el-table-column label="用户ID" prop="userId" width="90" align="center" sortable />
+      <el-table-column label="用户名" prop="username" min-width="120" show-overflow-tooltip sortable />
+      <el-table-column label="提现编号" width="180" fixed show-overflow-tooltip sortable>
         <template #default="{ row }">
           <span style="font-family:monospace;font-size:12px">{{ row.withdrawNo }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="银行"    prop="bankName"   width="120" show-overflow-tooltip />
-      <el-table-column label="账户名"  prop="accountName" width="120" show-overflow-tooltip />
-      <el-table-column label="账号"    width="140">
+      <el-table-column label="银行" prop="bankName" width="140" show-overflow-tooltip />
+      <el-table-column label="账户名" prop="accountName" width="140" show-overflow-tooltip />
+      <el-table-column label="账号" width="160">
         <template #default="{ row }">
           <span style="font-family:monospace;font-size:12px">{{ row.accountNo }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="金额"    width="110" align="right">
+      <el-table-column label="金额" width="130" align="right" sortable>
         <template #default="{ row }">
           <span style="color:#ff4d4f;font-weight:700">₦{{ fmt(row.amount) }}</span>
         </template>
@@ -74,9 +74,9 @@
       <el-table-column label="创建时间" prop="createTime" width="140" align="center">
         <template #default="{ row }">{{ row.createTime?.slice(0,16) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="200" align="center" fixed="right">
+      <el-table-column label="操作" width="220" align="center" fixed="right">
         <template #default="{ row }">
-          <div style="display:flex;gap:3px;justify-content:center;flex-wrap:nowrap">
+          <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
             <el-button size="small" @click="viewRow(row)">查看</el-button>
             <template v-if="canActWithdrawals && row.status==='pending'">
               <!-- Not yet claimed by anyone — show 接单 -->

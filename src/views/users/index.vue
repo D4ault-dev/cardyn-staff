@@ -17,38 +17,38 @@
     <!-- 表格 -->
     <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
       <el-table v-loading="loading" :data="list" border size="small"
-        style="width:100%" height="100%">
-        <el-table-column label="用户ID"   prop="userId"    width="80"  align="center" fixed />
-        <el-table-column label="手机号"   prop="phone"     width="140" />
-        <el-table-column label="真实姓名" prop="realName"  width="120" />
-        <el-table-column label="余额" width="120" align="right">
+        style="width:100%" height="100%" stripe>
+        <el-table-column label="用户ID" prop="userId" width="90" align="center" fixed sortable />
+        <el-table-column label="手机号" prop="phone" width="150" sortable />
+        <el-table-column label="真实姓名" prop="realName" width="140" show-overflow-tooltip sortable />
+        <el-table-column label="余额" width="140" align="right" sortable>
           <template #default="{ row }">
             <span style="color:#52c41a;font-weight:700">₦{{ fmt(row.balance) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="总销售额" width="130" align="right">
+        <el-table-column label="总销售额" width="140" align="right" sortable>
           <template #default="{ row }">
             <span style="color:#52c41a">₦{{ fmt(row.totalSales) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="交易次数" prop="tradeCount" width="80" align="center" />
-        <el-table-column label="等级" width="70" align="center">
+        <el-table-column label="交易次数" prop="tradeCount" width="100" align="center" sortable />
+        <el-table-column label="等级" width="80" align="center" sortable>
           <template #default="{ row }">Lv {{ row.level }}</template>
         </el-table-column>
-        <el-table-column label="国家" prop="country" width="90" />
-        <el-table-column label="状态" width="80" align="center">
+        <el-table-column label="国家" prop="country" width="100" />
+        <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">
               {{ row.status === 1 ? '正常' : '封禁' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="注册时间" prop="createTime" width="110" align="center">
+        <el-table-column label="注册时间" prop="createTime" width="120" align="center" sortable>
           <template #default="{ row }">{{ row.createTime?.slice(0,10) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="200" align="center" fixed="right">
+        <el-table-column label="操作" width="220" align="center" fixed="right">
           <template #default="{ row }">
-            <div style="display:flex;gap:4px;justify-content:center;flex-wrap:nowrap">
+            <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
               <el-button size="small" @click="viewRow(row)">查看</el-button>
               <el-button size="small" type="primary" plain @click="startChat(row.userId)">发起聊天</el-button>
               <el-button size="small"

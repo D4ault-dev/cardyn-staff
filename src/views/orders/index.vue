@@ -28,36 +28,38 @@
     <!-- 表格 -->
     <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
     <el-table v-loading="loading" :data="list" border
-      style="width:100%" height="100%">
-      <el-table-column label="id"         prop="id"     width="55"  align="center" fixed />
-      <el-table-column label="用户id"     prop="userId" width="70"  align="center" />
-      <el-table-column label="用户名" min-width="100" show-overflow-tooltip>
+      style="width:100%" height="100%"
+      :default-sort="{ prop: 'id', order: 'descending' }"
+      stripe>
+      <el-table-column label="id" prop="id" width="70" align="center" fixed sortable />
+      <el-table-column label="用户id" prop="userId" width="90" align="center" sortable />
+      <el-table-column label="用户名" min-width="120" show-overflow-tooltip sortable>
         <template #default="{ row }">
           <span style="font-size:13px">{{ row.userNameDisplay || row.username || '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="核销订单号" width="170" fixed>
+      <el-table-column label="核销订单号" width="200" fixed sortable show-overflow-tooltip>
         <template #default="{ row }">
           <span style="font-family:monospace;font-size:12px">{{ row.orderNo }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="输入类型" width="80" align="center">
+      <el-table-column label="输入类型" width="100" align="center">
         <template #default="{ row }">{{ row.inputType || '—' }}</template>
       </el-table-column>
-      <el-table-column label="面值" width="80" align="center">
+      <el-table-column label="面值" width="100" align="center">
         <template #default="{ row }">
           <span style="color:#52c41a;font-weight:600">{{ currSym(row.cardCurrency) }}{{ row.cardAmount }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="数量" width="60" align="center">
+      <el-table-column label="数量" width="80" align="center">
         <template #default="{ row }">{{ row.quantity ?? 0 }}</template>
       </el-table-column>
-      <el-table-column label="结算金额" width="110" align="right">
+      <el-table-column label="结算金额" width="130" align="right" sortable>
         <template #default="{ row }">
           <span style="color:#ff4d4f;font-weight:700">₦{{ fmt(row.ngnAmount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="处理人" min-width="90" align="center">
+      <el-table-column label="处理人" min-width="110" align="center">
         <template #default="{ row }">
           <span v-if="row.staffName"
             :style="{ fontSize:'12px', fontWeight:600, color: Number(row.staffId)===Number(userStore.userId) ? '#1677ff' : '#606266' }">
@@ -66,31 +68,31 @@
           <span v-else style="color:#bbb;font-size:11px">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="受理时间" width="140" align="center">
+      <el-table-column label="受理时间" width="150" align="center" sortable>
         <template #default="{ row }">
           <span style="font-size:12px">{{ row.finishTime?.slice(0,16) || '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="创建时间" width="140" align="center">
+      <el-table-column label="创建时间" width="150" align="center" sortable>
         <template #default="{ row }">
           <span style="font-size:12px">{{ row.createTime?.slice(0,16) || '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" align="left" fixed="right">
+      <el-table-column label="操作" min-width="220" align="left" fixed="right">
         <template #default="{ row }">
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap;padding-left:4px">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-left:4px">
             <el-button size="small" type="primary" @click="viewData(row)">查看数据</el-button>
             <el-button size="small" type="success" @click="viewCard(row)">查看</el-button>
             <!-- status badge — read-only, no action buttons -->
             <span v-if="row.status==='paid'"
-              style="font-size:11px;color:#52c41a;border:1px solid #b7eb8f;border-radius:3px;padding:1px 6px;background:#f6ffed;white-space:nowrap;font-weight:600">
+              style="font-size:11px;color:#52c41a;border:1px solid #b7eb8f;border-radius:3px;padding:2px 8px;background:#f6ffed;white-space:nowrap;font-weight:600">
               核销完成
             </span>
             <span v-if="row.status==='rejected'"
-              style="font-size:11px;color:#ff4d4f;border:1px solid #ffccc7;border-radius:3px;padding:1px 5px;background:#fff1f0;white-space:nowrap"
+              style="font-size:11px;color:#ff4d4f;border:1px solid #ffccc7;border-radius:3px;padding:2px 8px;background:#fff1f0;white-space:nowrap"
               :title="row.rejectReason||'bad card'">失败</span>
             <span v-if="row.status==='pending'||row.status==='processing'"
-              style="font-size:11px;color:#fa8c16;border:1px solid #ffd591;border-radius:3px;padding:1px 6px;background:#fff7e6;white-space:nowrap">
+              style="font-size:11px;color:#fa8c16;border:1px solid #ffd591;border-radius:3px;padding:2px 8px;background:#fff7e6;white-space:nowrap">
               {{ row.status==='pending'?'待处理':'处理中' }}
             </span>
           </div>
