@@ -209,7 +209,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import request, { clearCache } from '@/utils/request'
 import { usePermissions } from '@/composables/usePermissions'
@@ -308,10 +308,25 @@ async function pasteReceipt() {
 
 // Claim a pending withdrawal — atomic, same pattern as orders
 async function claimWithdrawal(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确认接单处理用户 ${row.username || row.userId} 的 ₦${fmt(row.amount)} 提现申请吗？`,
+      '确认接单',
+      {
+        confirmButtonText: '确认接单',
+        cancelButtonText: '取消',
+        type: 'info',
+      }
+    )
+  } catch {
+    return // User cancelled
+  }
+
   claiming.value = row.id
   try {
     await request({ url:'/tuka/withdrawal/claim', method:'put', data:{ id: row.id } })
     silentRefresh()
+    ElMessage.success('接单成功')
   } catch(e) {
     const msg = e.message || ''
     if (msg.includes('409') || msg.toLowerCase().includes('claimed')) {
@@ -332,6 +347,26 @@ async function claimWithdrawal(row) {
 }
 
 async function submitPay() {
+  if (!receiptFile.value) {
+    ElMessage.warning('请上传付款收据')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认已向用户 ${payForm.value.username || payForm.value.userId} 付款 ₦${fmt((payForm.value.amount||0)-(payForm.value.fee||0))} 吗？此操作不可撤销。`,
+      '确认付款',
+      {
+        confirmButtonText: '确认已付款',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+  } catch {
+    return // User cancelled
+  }
+
   submitting.value = true
   try {
     let receiptImage = ''
@@ -356,6 +391,26 @@ async function submitPay() {
 }
 
 async function submitReject() {
+  if (!rejectForm.value.remark?.trim()) {
+    ElMessage.warning('请输入拒绝原因')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认拒绝用户 ${rejectForm.value.username} 的 ₦${fmt(rejectForm.value.amount)} 提现申请吗？`,
+      '确认拒绝',
+      {
+        confirmButtonText: '确认拒绝',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+  } catch {
+    return // User cancelled
+  }
+
   submitting.value = true
   try {
     await request({ url:'/tuka/withdrawal/audit', method:'put', data:{ id:rejectForm.value.id, status:'rejected', remark:rejectForm.value.remark } })

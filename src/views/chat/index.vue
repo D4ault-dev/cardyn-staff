@@ -199,7 +199,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 import { useAuthImg } from '@/composables/useAuthImg'
 import { useUserStore } from '@/stores/user'
@@ -524,8 +524,24 @@ async function handleClaim() {
 async function handleClose() {
   if (!active.value) return
   try {
+    await ElMessageBox.confirm(
+      `确认关闭与用户 ${active.value.userName || active.value.userId} 的对话吗？`,
+      '确认关闭对话',
+      {
+        confirmButtonText: '确认关闭',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+  } catch {
+    return // User cancelled
+  }
+
+  try {
     await request({ url: `/tuka/chat/admin/close/${active.value.id}`, method: 'post' })
     active.value = { ...active.value, status: 'closed' }; stopPoll(); loadSessions()
+    ElMessage.success('对话已关闭')
   } catch (e) { ElMessage.error(e.message) }
 }
 

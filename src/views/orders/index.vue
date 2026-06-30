@@ -379,7 +379,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Upload } from '@element-plus/icons-vue'
 import request, { clearCache } from '@/utils/request'
 import { usePermissions } from '@/composables/usePermissions'
@@ -496,6 +496,21 @@ async function pasteImage() {
 async function saveNewAmount() {
   const amt = parseFloat(newAmountEdit.value)
   if (isNaN(amt) || amt <= 0) { ElMessage.warning('请输入有效金额'); return }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认变更结算金额从 ₦${fmt(cur.value.ngnAmount)} 到 ₦${fmt(amt)} 吗？差额：₦${fmt((cur.value.ngnAmount||0) - amt)}`,
+      '确认变更结算金额',
+      {
+        confirmButtonText: '确认变更',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return // User cancelled
+  }
+
   savingAmount.value = true
   try {
     await request({
@@ -512,8 +527,25 @@ async function saveNewAmount() {
 // Quick audit from 查看数据 dialog — uploads image, passes remark, same as Staff Desktop
 async function quickAudit(row, status) {
   const label = status === 'paid' ? '核销完成' : '核销失败'
-  const confirmed = window.confirm(`确认${label}？`)
-  if (!confirmed) return
+
+  // Strict confirmation with ElMessageBox
+  try {
+    await ElMessageBox.confirm(
+      status === 'paid'
+        ? `确认核销完成订单 ${row.orderNo}，用户将收到 ₦${fmt(parseFloat(newAmountEdit.value) || row.ngnAmount)} 吗？此操作不可撤销。`
+        : `确认拒绝订单 ${row.orderNo} 吗？此操作不可撤销。`,
+      label,
+      {
+        confirmButtonText: `确认${label}`,
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: status === 'paid' ? 'el-button--primary' : 'el-button--danger',
+      }
+    )
+  } catch {
+    return // User cancelled
+  }
+
   submitting.value = true
   try {
     // Upload verify image if one was selected/pasted
