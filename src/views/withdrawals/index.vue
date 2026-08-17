@@ -21,24 +21,24 @@
 
     <!-- 表格 -->
     <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
-    <el-table v-loading="loading" :data="list" border
-      style="width:100%" height="100%" stripe>
-      <el-table-column label="ID" prop="id" width="70" align="center" fixed sortable />
-      <el-table-column label="用户ID" prop="userId" width="90" align="center" sortable />
-      <el-table-column label="用户名" prop="username" min-width="120" show-overflow-tooltip sortable />
-      <el-table-column label="提现编号" width="180" fixed show-overflow-tooltip sortable>
+    <el-table v-loading="loading" :data="list" border size="small"
+      :header-cell-style="{background:'#f5f7fa',color:'#606266',padding:'8px 0'}"
+      :cell-style="{padding:'5px 0'}" style="width:100%" height="100%">
+      <el-table-column label="ID"      prop="id"         width="60"  align="center" fixed />
+      <el-table-column label="用户"    prop="username"   width="90" />
+      <el-table-column label="提现编号" width="160" fixed>
         <template #default="{ row }">
           <span style="font-family:monospace;font-size:12px">{{ row.withdrawNo }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="银行" prop="bankName" width="140" show-overflow-tooltip />
-      <el-table-column label="账户名" prop="accountName" width="140" show-overflow-tooltip />
-      <el-table-column label="账号" width="160">
+      <el-table-column label="银行"    prop="bankName"   width="120" show-overflow-tooltip />
+      <el-table-column label="账户名"  prop="accountName" width="120" show-overflow-tooltip />
+      <el-table-column label="账号"    width="140">
         <template #default="{ row }">
           <span style="font-family:monospace;font-size:12px">{{ row.accountNo }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="金额" width="130" align="right" sortable>
+      <el-table-column label="金额"    width="110" align="right">
         <template #default="{ row }">
           <span style="color:#ff4d4f;font-weight:700">₦{{ fmt(row.amount) }}</span>
         </template>
@@ -53,19 +53,16 @@
       </el-table-column>
       <el-table-column label="收据"    width="70" align="center">
         <template #default="{ row }">
-          <el-image v-if="row.receiptImage"
-            :src="authImg(row.receiptImage)"
-            style="width:32px;height:32px;border-radius:3px;cursor:pointer;display:block"
-            fit="cover"
-            :preview-src-list="[authImg(row.receiptImage)]"
-            preview-teleported />
+          <el-image v-if="row.receiptImage" :src="authImg(row.receiptImage)"
+            style="width:32px;height:32px;border-radius:3px;cursor:pointer"
+            fit="cover" :preview-src-list="[authImg(row.receiptImage)]" />
           <span v-else style="color:#bbb">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="处理人" min-width="90" align="center">
+      <el-table-column label="处理人" width="90" align="center">
         <template #default="{ row }">
           <span v-if="row.staffName"
-            :style="{ fontSize:'12px', fontWeight:600, color: Number(row.staffId)===Number(userStore.userId) ? '#1677ff' : '#606266' }">
+            :style="{ fontSize:'11px', fontWeight:600, color: Number(row.staffId)===Number(userStore.userId) ? '#1677ff' : '#606266' }">
             {{ row.staffName }}
           </span>
           <span v-else style="color:#bbb;font-size:11px">—</span>
@@ -74,9 +71,9 @@
       <el-table-column label="创建时间" prop="createTime" width="140" align="center">
         <template #default="{ row }">{{ row.createTime?.slice(0,16) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="220" align="center" fixed="right">
+      <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
-          <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
+          <div style="display:flex;gap:3px;justify-content:center;flex-wrap:nowrap">
             <el-button size="small" @click="viewRow(row)">查看</el-button>
             <template v-if="canActWithdrawals && row.status==='pending'">
               <!-- Not yet claimed by anyone — show 接单 -->
@@ -104,7 +101,7 @@
     <!-- 分页 -->
     <div class="page-footer">
       <el-pagination v-model:current-page="q.pageNum" v-model:page-size="q.pageSize"
-        :total="total" :page-sizes="[20,50,100]"
+        :total="total" :page-sizes="[10,20,50]"
         layout="total, sizes, prev, pager, next" @change="getList" />
     </div>
 
@@ -127,7 +124,7 @@
       <div v-if="cur.receiptImage" style="margin-top:14px">
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">付款收据</div>
         <el-image :src="authImg(cur.receiptImage)" style="max-width:200px;border-radius:6px"
-          fit="contain" :preview-src-list="[authImg(cur.receiptImage)]" preview-teleported />
+          fit="contain" :preview-src-list="[authImg(cur.receiptImage)]" />
       </div>
       <template #footer><el-button @click="viewOpen=false">关 闭</el-button></template>
     </el-dialog>
@@ -158,25 +155,11 @@
       </div>
       <el-form label-width="70px">
         <el-form-item label="付款收据">
-          <div style="display:flex;gap:12px;align-items:flex-start">
-            <!-- Upload area — click or drag, same as orders page -->
-            <el-upload action="#" :auto-upload="false" :show-file-list="false"
-              accept="image/*" drag style="width:140px"
-              :on-change="f => { receiptFile = f.raw; receiptPreview = URL.createObjectURL(f.raw) }">
-              <div v-if="receiptPreview" style="position:relative;width:140px;height:100px">
-                <img :src="receiptPreview" style="width:140px;height:100px;object-fit:cover;border-radius:4px" />
-                <button
-                  style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center"
-                  @click.prevent="receiptFile=null;receiptPreview=''">✕</button>
-              </div>
-              <div v-else style="padding:16px;text-align:center">
-                <div style="font-size:22px;color:#1677ff;margin-bottom:4px">📤</div>
-                <div style="font-size:12px;color:#606266;font-weight:500">上传收据</div>
-                <div style="font-size:11px;color:#bbb;margin-top:2px">支持拖拽</div>
-              </div>
-            </el-upload>
-            <el-button size="small" @click="pasteReceipt">点击粘贴图片</el-button>
-          </div>
+          <el-upload action="#" :auto-upload="false" :on-change="onReceiptChange" :show-file-list="false" accept="image/*">
+            <el-button size="small">上传收据</el-button>
+          </el-upload>
+          <img v-if="receiptPreview" :src="receiptPreview"
+            style="width:70px;height:70px;object-fit:cover;border-radius:4px;margin-top:6px;display:block" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="payForm.remark" type="textarea" :rows="2" placeholder="可选" />
@@ -209,13 +192,12 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import request, { clearCache } from '@/utils/request'
 import { usePermissions } from '@/composables/usePermissions'
 import { useAuthImg } from '@/composables/useAuthImg'
 import { useUserStore } from '@/stores/user'
-import LazyImg from '@/components/LazyImg.vue'
 
 const { canActWithdrawals } = usePermissions()
 const { authImg } = useAuthImg()
@@ -227,7 +209,7 @@ const loading = ref(false)
 const dateRange = ref([])
 const pendingCount = ref(0)
 
-const q = ref({ pageNum:1, pageSize:20, status:'', username:'', startTime:'', endTime:'' })
+const q = ref({ pageNum:1, pageSize:10, status:'', username:'', startTime:'', endTime:'' })
 
 const statusType  = { pending:'warning', completed:'success', approved:'success', rejected:'danger', processing:'primary' }
 const statusLabel = { pending:'待处理', completed:'已完成', approved:'已批准', rejected:'已拒绝', processing:'处理中' }
@@ -288,45 +270,12 @@ function openReject(row) { rejectForm.value = { id:row.id, username:row.username
 
 function onReceiptChange(file) { receiptFile.value = file.raw; receiptPreview.value = URL.createObjectURL(file.raw) }
 
-async function pasteReceipt() {
-  try {
-    const items = await navigator.clipboard.read()
-    for (const item of items) {
-      for (const type of item.types) {
-        if (type.startsWith('image/')) {
-          const blob = await item.getType(type)
-          receiptFile.value = new File([blob], 'paste.png', { type })
-          receiptPreview.value = URL.createObjectURL(blob)
-          ElMessage.success('图片已粘贴')
-          return
-        }
-      }
-    }
-    ElMessage.warning('剪贴板中没有图片')
-  } catch { ElMessage.warning('无法读取剪贴板，请使用上传按钮') }
-}
-
 // Claim a pending withdrawal — atomic, same pattern as orders
 async function claimWithdrawal(row) {
-  try {
-    await ElMessageBox.confirm(
-      `确认接单处理用户 ${row.username || row.userId} 的 ₦${fmt(row.amount)} 提现申请吗？`,
-      '确认接单',
-      {
-        confirmButtonText: '确认接单',
-        cancelButtonText: '取消',
-        type: 'info',
-      }
-    )
-  } catch {
-    return // User cancelled
-  }
-
   claiming.value = row.id
   try {
     await request({ url:'/tuka/withdrawal/claim', method:'put', data:{ id: row.id } })
     silentRefresh()
-    ElMessage.success('接单成功')
   } catch(e) {
     const msg = e.message || ''
     if (msg.includes('409') || msg.toLowerCase().includes('claimed')) {
@@ -347,26 +296,6 @@ async function claimWithdrawal(row) {
 }
 
 async function submitPay() {
-  if (!receiptFile.value) {
-    ElMessage.warning('请上传付款收据')
-    return
-  }
-
-  try {
-    await ElMessageBox.confirm(
-      `确认已向用户 ${payForm.value.username || payForm.value.userId} 付款 ₦${fmt((payForm.value.amount||0)-(payForm.value.fee||0))} 吗？此操作不可撤销。`,
-      '确认付款',
-      {
-        confirmButtonText: '确认已付款',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger',
-      }
-    )
-  } catch {
-    return // User cancelled
-  }
-
   submitting.value = true
   try {
     let receiptImage = ''
@@ -381,9 +310,22 @@ async function submitPay() {
         return
       }
     }
-    await request({ url: '/tuka/withdrawal/audit', method: 'put', data: { id: payForm.value.id, status: 'completed', remark: payForm.value.remark, receiptImage } })
-    clearCache('/tuka/withdrawal/list')
-    ElMessage.success('付款成功')
+    // Try Auto Pay first, fall back to Manual Pay if Auto Pay fails or is disabled
+    try {
+      await request({ url: '/tuka/withdrawal/audit', method: 'put', data: { id: payForm.value.id, status: 'completed', paymentMode: 'auto', remark: payForm.value.remark, receiptImage } })
+      clearCache('/tuka/withdrawal/list')
+      ElMessage.success('已提交 PalmPay，等待到账确认')
+    } catch (autoErr) {
+      const msg = autoErr?.message || ''
+      // If auto pay disabled or bank not supported, fall back to manual
+      if (msg.includes('disabled') || msg.includes('not supported') || msg.includes('Manual Pay')) {
+        await request({ url: '/tuka/withdrawal/audit', method: 'put', data: { id: payForm.value.id, status: 'completed', paymentMode: 'manual', remark: payForm.value.remark, receiptImage } })
+        clearCache('/tuka/withdrawal/list')
+        ElMessage.success('手动付款已确认完成')
+      } else {
+        throw autoErr
+      }
+    }
     payOpen.value = false
     silentRefresh(); fetchPendingCount()
   } catch(e) { ElMessage.error(e.message) }
@@ -391,26 +333,6 @@ async function submitPay() {
 }
 
 async function submitReject() {
-  if (!rejectForm.value.remark?.trim()) {
-    ElMessage.warning('请输入拒绝原因')
-    return
-  }
-
-  try {
-    await ElMessageBox.confirm(
-      `确认拒绝用户 ${rejectForm.value.username} 的 ₦${fmt(rejectForm.value.amount)} 提现申请吗？`,
-      '确认拒绝',
-      {
-        confirmButtonText: '确认拒绝',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger',
-      }
-    )
-  } catch {
-    return // User cancelled
-  }
-
   submitting.value = true
   try {
     await request({ url:'/tuka/withdrawal/audit', method:'put', data:{ id:rejectForm.value.id, status:'rejected', remark:rejectForm.value.remark } })
@@ -432,34 +354,12 @@ async function fetchPendingCount() {
 function copy(text) { navigator.clipboard.writeText(text).then(() => ElMessage.success('已复制')) }
 
 let listTimer = null
-let _cleanup  = null
 onMounted(() => {
   getList(); fetchPendingCount()
-  // Ctrl+V paste when pay dialog is open
-  function handlePaste(e) {
-    if (!payOpen.value) return
-    const items = e.clipboardData?.items
-    if (!items) return
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        const file = items[i].getAsFile()
-        if (file) {
-          receiptFile.value = file
-          receiptPreview.value = URL.createObjectURL(file)
-          ElMessage.success('图片已粘贴')
-        }
-        break
-      }
-    }
-  }
-  window.addEventListener('paste', handlePaste)
+  // Silent background refresh every 10s
   listTimer = setInterval(() => { if (!document.hidden) silentRefresh() }, 10_000)
-  _cleanup = () => {
-    window.removeEventListener('paste', handlePaste)
-    if (listTimer) clearInterval(listTimer)
-  }
 })
-onUnmounted(() => { if (_cleanup) _cleanup() })
+onUnmounted(() => { if (listTimer) clearInterval(listTimer) })
 </script>
 
 <style scoped>
