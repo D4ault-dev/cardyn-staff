@@ -59,7 +59,7 @@ jobs:
             src-tauri/target/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/macos/*.app.tar.gz
             src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: warn
 
   # ── Create GitHub Release + deploy to server (sequential, after both builds) 
