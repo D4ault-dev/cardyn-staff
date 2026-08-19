@@ -6,93 +6,79 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ── macOS build → directly SCP to server (no artifact storage needed) ───────
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Build Tauri app (macOS)
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-      - name: Upload macOS build to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "src-tauri/target/release/bundle/dmg/*.dmg,src-tauri/target/release/bundle/macos/*.app.tar.gz,src-tauri/target/release/bundle/macos/*.app.tar.gz.sig"
-          target: "/www/wwwroot/cardyn.net/downloads/"
-          strip_components: 7
-
-  # ── Windows build → directly SCP to server ──────────────────────────────────
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Build Tauri app (Windows)
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-      - name: Upload Windows build to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "src-tauri/target/release/bundle/nsis/*.exe,src-tauri/target/release/bundle/nsis/*.exe.sig"
-          target: "/www/wwwroot/cardyn.net/downloads/"
-          strip_components: 7
-
-  # ── After both builds upload, generate the updater JSON ─────────────────────
-  deploy:
-    needs: [build-macos, build-windows]
-    runs-on: ubuntu-latest
-    if: always() && (needs.build-macos.result == 'success' || needs.build-windows.result == 'success')
+  # ── Build on each platform, upload to GitHub Release directly ───────────────
+  build:
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact_name: cardyn-staff-macos
+          - os: windows-latest
+            artifact_name: cardyn-staff-windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # Build and publish to GitHub Release in one step
+      # tauri-action handles cross-platform release creation correctly
+      # when each job runs independently with the same tag
+      - name: Build Tauri app and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v${{ steps.version.outputs.version }}
+          releaseName: 'Cardyn Staff v${{ steps.version.outputs.version }}'
+          releaseBody: |
+            ## Cardyn Staff v${{ steps.version.outputs.version }}
+
+            ### Downloads
+            - **Windows** — `.exe` installer below
+            - **macOS** — `.dmg` installer below
+
+            Auto-update: existing installs will be notified automatically.
+          releaseDraft: false
+          prerelease: false
+          # Each platform uploads its own assets to the same release
+          # tauri-action is designed for this parallel pattern
+
+  # ── After both builds, generate tauri-latest.json on server ─────────────────
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: success()
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -102,47 +88,50 @@ jobs:
         run: |
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Generate tauri-latest.json + create GitHub Release
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Fetch release assets and generate updater JSON
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Get the release for this version
+          RELEASE=$(gh api repos/${{ github.repository }}/releases/tags/v$VERSION)
+          echo "$RELEASE" | python3 -c "
+          import json, sys
+          release = json.load(sys.stdin)
+          assets = release.get('assets', [])
+          win_exe = next((a['browser_download_url'] for a in assets if a['name'].endswith('.exe') and not a['name'].endswith('.sig')), '')
+          win_sig_url = next((a['browser_download_url'] for a in assets if a['name'].endswith('.exe.sig')), '')
+          mac_tar = next((a['browser_download_url'] for a in assets if a['name'].endswith('.app.tar.gz') and not a['name'].endswith('.sig')), '')
+          mac_sig_url = next((a['browser_download_url'] for a in assets if a['name'].endswith('.app.tar.gz.sig')), '')
+          import urllib.request, os
+          def fetch(url): 
+              if not url: return ''
+              with urllib.request.urlopen(url) as r: return r.read().decode('utf-8').strip()
+          win_sig = fetch(win_sig_url)
+          mac_sig = fetch(mac_sig_url)
+          import datetime
+          date = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')
+          version = os.environ['VERSION']
+          print(json.dumps({
+              'version': version,
+              'notes': f'Cardyn Staff v{version} — improvements and bug fixes',
+              'pub_date': date,
+              'platforms': {
+                  'windows-x86_64': {'signature': win_sig, 'url': win_exe},
+                  'darwin-x86_64':  {'signature': mac_sig, 'url': mac_tar},
+                  'darwin-aarch64': {'signature': mac_sig, 'url': mac_tar},
+              }
+          }, indent=2))
+          " > tauri-latest.json
+          echo "=== tauri-latest.json ==="
+          cat tauri-latest.json
+
+      - name: Upload updater JSON to server
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd /www/wwwroot/cardyn.net/downloads
-            VERSION="${{ steps.version.outputs.version }}"
-            DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-
-            WIN_NSIS=$(ls Cardyn*.exe 2>/dev/null | grep -v sig | head -1 || echo "")
-            WIN_SIG=$(ls Cardyn*.exe.sig 2>/dev/null | head -1 || echo "")
-            MAC_TAR=$(ls Cardyn*.app.tar.gz 2>/dev/null | grep -v sig | head -1 || echo "")
-            MAC_SIG=$(ls Cardyn*.app.tar.gz.sig 2>/dev/null | head -1 || echo "")
-
-            cat > tauri-latest.json << ENDJSON
-            {
-              "version": "$VERSION",
-              "notes": "Cardyn Staff v$VERSION — improvements and bug fixes",
-              "pub_date": "$DATE",
-              "platforms": {
-                "windows-x86_64": {
-                  "signature": "$(cat "$WIN_SIG" 2>/dev/null || echo '')",
-                  "url": "https://cardyn.net/downloads/$WIN_NSIS"
-                },
-                "darwin-x86_64": {
-                  "signature": "$(cat "$MAC_SIG" 2>/dev/null || echo '')",
-                  "url": "https://cardyn.net/downloads/$MAC_TAR"
-                },
-                "darwin-aarch64": {
-                  "signature": "$(cat "$MAC_SIG" 2>/dev/null || echo '')",
-                  "url": "https://cardyn.net/downloads/$MAC_TAR"
-                }
-              }
-            }
-            ENDJSON
-
-            echo "=== tauri-latest.json ==="
-            cat tauri-latest.json
-            echo "=== Downloads dir ==="
-            ls -lh
+          source: "tauri-latest.json"
+          target: "/www/wwwroot/cardyn.net/downloads/"
