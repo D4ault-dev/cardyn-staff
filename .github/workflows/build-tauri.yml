@@ -127,11 +127,21 @@ jobs:
           echo "=== tauri-latest.json ==="
           cat tauri-latest.json
 
-      - name: Upload updater JSON to server
-        uses: appleboy/scp-action@v0.1.7
+      - name: Write updater JSON content to env
+        run: |
+          echo "TAURI_JSON_CONTENT<<EOF" >> $GITHUB_ENV
+          cat tauri-latest.json >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Upload updater JSON to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "tauri-latest.json"
-          target: "/www/wwwroot/cardyn.net/downloads/"
+          envs: TAURI_JSON_CONTENT
+          script: |
+            mkdir -p /www/wwwroot/cardyn.net/downloads
+            echo "$TAURI_JSON_CONTENT" > /www/wwwroot/cardyn.net/downloads/tauri-latest.json
+            echo "=== Written tauri-latest.json ==="
+            cat /www/wwwroot/cardyn.net/downloads/tauri-latest.json
