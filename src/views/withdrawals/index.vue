@@ -53,9 +53,11 @@
       </el-table-column>
       <el-table-column label="收据"    width="60" align="center">
         <template #default="{ row }">
-          <el-image v-if="row.receiptImage" :src="authImg(row.receiptImage)"
-            style="width:32px;height:32px;border-radius:3px;cursor:pointer"
-            fit="cover" :preview-src-list="[authImg(row.receiptImage)]" />
+          <el-button v-if="row.receiptImage"
+            size="small" type="primary" link
+            @click="openReceipt(row.receiptImage)">
+            查看
+          </el-button>
           <span v-else style="color:#bbb">—</span>
         </template>
       </el-table-column>
@@ -126,8 +128,9 @@
       </el-descriptions>
       <div v-if="cur.receiptImage" style="margin-top:14px">
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">付款收据</div>
-        <el-image :src="authImg(cur.receiptImage)" style="max-width:200px;border-radius:6px"
-          fit="contain" :preview-src-list="[authImg(cur.receiptImage)]" />
+        <el-button type="primary" @click="openReceipt(cur.receiptImage)" style="width:100%">
+          在浏览器中查看完整收据 ↗
+        </el-button>
       </div>
       <template #footer><el-button @click="viewOpen=false">关 闭</el-button></template>
     </el-dialog>
@@ -355,6 +358,18 @@ async function fetchPendingCount() {
 }
 
 function copy(text) { navigator.clipboard.writeText(text).then(() => ElMessage.success('已复制')) }
+
+async function openReceipt(url) {
+  const resolvedUrl = authImg(url)
+  try {
+    // Try Tauri shell open first (desktop app)
+    const { open } = await import('@tauri-apps/plugin-shell')
+    await open(resolvedUrl)
+  } catch {
+    // Fallback: open in browser tab
+    window.open(resolvedUrl, '_blank', 'noopener')
+  }
+}
 
 let listTimer = null
 onMounted(() => {
