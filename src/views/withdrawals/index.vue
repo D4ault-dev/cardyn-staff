@@ -53,11 +53,10 @@
       </el-table-column>
       <el-table-column label="收据"    width="60" align="center">
         <template #default="{ row }">
-          <el-button v-if="row.receiptImage"
-            size="small" type="primary" link
-            @click="openReceipt(row.receiptImage)">
-            查看
-          </el-button>
+          <img v-if="row.receiptImage"
+            :src="authImg(row.receiptImage)"
+            style="width:32px;height:32px;border-radius:3px;cursor:pointer;object-fit:cover;border:1px solid #eee"
+            @click="previewImg(authImg(row.receiptImage))" />
           <span v-else style="color:#bbb">—</span>
         </template>
       </el-table-column>
@@ -128,9 +127,10 @@
       </el-descriptions>
       <div v-if="cur.receiptImage" style="margin-top:14px">
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">付款收据</div>
-        <el-button type="primary" @click="openReceipt(cur.receiptImage)" style="width:100%">
-          在浏览器中查看完整收据 ↗
-        </el-button>
+        <img :src="authImg(cur.receiptImage)"
+          style="max-width:100%;border-radius:6px;cursor:pointer;display:block;border:1px solid #eee"
+          @click="previewImg(authImg(cur.receiptImage))" />
+        <div style="font-size:11px;color:#999;margin-top:4px;text-align:center">点击放大查看</div>
       </div>
       <template #footer><el-button @click="viewOpen=false">关 闭</el-button></template>
     </el-dialog>
@@ -193,6 +193,22 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- ── Custom image preview modal with solid background ── -->
+    <el-dialog
+      v-model="imgPreviewOpen"
+      :title="null"
+      :show-close="true"
+      :modal="true"
+      :append-to-body="true"
+      width="auto"
+      style="max-width:90vw;background:#1a1a1a;border-radius:12px;"
+      :header-style="{ background:'#1a1a1a', border:'none', padding:'8px 16px' }"
+      :body-style="{ background:'#1a1a1a', padding:'8px', display:'flex', justifyContent:'center' }">
+      <img v-if="imgPreviewUrl" :src="imgPreviewUrl"
+        style="max-width:80vw;max-height:80vh;object-fit:contain;border-radius:8px;display:block" />
+    </el-dialog>
+
   </div>
 </template>
 
@@ -230,6 +246,11 @@ const receiptFile    = ref(null)
 const receiptPreview = ref('')
 const submitting  = ref(false)
 const claiming    = ref(null)   // id of withdrawal being claimed
+
+// Image preview modal
+const imgPreviewOpen = ref(false)
+const imgPreviewUrl  = ref('')
+function previewImg(url) { imgPreviewUrl.value = url; imgPreviewOpen.value = true }
 
 // A staff can pay/reject only if they claimed it (staffId matches) or are super admin
 function canEdit(row) {
@@ -358,18 +379,6 @@ async function fetchPendingCount() {
 }
 
 function copy(text) { navigator.clipboard.writeText(text).then(() => ElMessage.success('已复制')) }
-
-async function openReceipt(url) {
-  const resolvedUrl = authImg(url)
-  try {
-    // Try Tauri shell open first (desktop app)
-    const { open } = await import('@tauri-apps/plugin-shell')
-    await open(resolvedUrl)
-  } catch {
-    // Fallback: open in browser tab
-    window.open(resolvedUrl, '_blank', 'noopener')
-  }
-}
 
 let listTimer = null
 onMounted(() => {
