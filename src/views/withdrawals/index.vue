@@ -24,16 +24,16 @@
     <el-table v-loading="loading" :data="list" border size="small"
       :header-cell-style="{background:'#f5f7fa',color:'#606266',padding:'8px 0'}"
       :cell-style="{padding:'5px 0'}" style="width:100%" height="100%">
-      <el-table-column label="ID"      prop="id"         width="60"  align="center" fixed />
-      <el-table-column label="用户"    prop="username"   width="90" />
-      <el-table-column label="提现编号" width="160" fixed>
+      <el-table-column label="ID"      prop="id"         width="55"  align="center" fixed />
+      <el-table-column label="用户ID"  prop="userId"     width="70"  align="center">
         <template #default="{ row }">
-          <span style="font-family:monospace;font-size:12px">{{ row.withdrawNo }}</span>
+          <span style="font-family:monospace;font-size:11px;color:#409EFF">{{ row.userId }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="银行"    prop="bankName"   width="120" show-overflow-tooltip />
-      <el-table-column label="账户名"  prop="accountName" width="120" show-overflow-tooltip />
-      <el-table-column label="账号"    width="140">
+      <el-table-column label="用户"    prop="username"   width="100" show-overflow-tooltip />
+      <el-table-column label="银行"    prop="bankName"   width="110" show-overflow-tooltip />
+      <el-table-column label="账户名"  prop="accountName" width="110" show-overflow-tooltip />
+      <el-table-column label="账号"    width="130">
         <template #default="{ row }">
           <span style="font-family:monospace;font-size:12px">{{ row.accountNo }}</span>
         </template>
@@ -43,15 +43,15 @@
           <span style="color:#ff4d4f;font-weight:700">₦{{ fmt(row.amount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="手续费"  width="90" align="right">
+      <el-table-column label="手续费"  width="80" align="right">
         <template #default="{ row }">₦{{ fmt(row.fee) }}</template>
       </el-table-column>
-      <el-table-column label="状态"    width="90" align="center">
+      <el-table-column label="状态"    width="85" align="center">
         <template #default="{ row }">
           <el-tag :type="statusType[row.status]" size="small">{{ statusLabel[row.status]||row.status }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="收据"    width="70" align="center">
+      <el-table-column label="收据"    width="60" align="center">
         <template #default="{ row }">
           <el-image v-if="row.receiptImage" :src="authImg(row.receiptImage)"
             style="width:32px;height:32px;border-radius:3px;cursor:pointer"
@@ -110,6 +110,9 @@
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="提现编号" :span="2">
           <span style="font-family:monospace">{{ cur.withdrawNo }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="用户ID">
+          <span style="font-family:monospace;color:#409EFF;font-weight:600">{{ cur.userId }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="用户">{{ cur.username||cur.userId }}</el-descriptions-item>
         <el-descriptions-item label="银行">{{ cur.bankName }}</el-descriptions-item>
