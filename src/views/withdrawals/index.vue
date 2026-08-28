@@ -337,24 +337,30 @@ async function submitPay() {
         return
       }
     }
-    // Try Auto Pay first, fall back to Manual Pay if Auto Pay fails or is disabled
+    // Try Auto Pay — do NOT silently fall back to manual on failure
+    // A PalmPay failure means the money was NOT sent — staff must be informed and retry manually
     try {
       await request({ url: '/tuka/withdrawal/audit', method: 'put', data: { id: payForm.value.id, status: 'completed', paymentMode: 'auto', remark: payForm.value.remark, receiptImage } })
       clearCache('/tuka/withdrawal/list')
       ElMessage.success('已提交 PalmPay，等待到账确认')
     } catch (autoErr) {
       const msg = autoErr?.message || ''
-      // If auto pay disabled or bank not supported, fall back to manual
-      if (msg.includes('disabled') || msg.includes('not supported') || msg.includes('Manual Pay')) {
+      // Only specific non-payment errors fall back to manual:
+      // "disabled" = admin turned off auto pay in settings
+      // "not supported" = bank not in PalmPay's list
+      // Any other error (network, DNS, PalmPay down) = show error, do NOT mark as paid
+      if (msg.includes('Auto Pay is currently disabled') || msg.includes('not supported by PalmPay')) {
+        // These mean PalmPay was never attempted — safe to fall back to manual
         await request({ url: '/tuka/withdrawal/audit', method: 'put', data: { id: payForm.value.id, status: 'completed', paymentMode: 'manual', remark: payForm.value.remark, receiptImage } })
         clearCache('/tuka/withdrawal/list')
-        ElMessage.success('手动付款已确认完成')
+        ElMessage.warning('自动付款不可用，已切换为手动打款模式')
       } else {
-        throw autoErr
+        // PalmPay was attempted but failed (network, DNS, API error, etc.)
+        // Do NOT mark as completed — show the error so staff can retry or investigate
+        ElMessage.error('⚠️ PalmPay付款失败，用户余额未变动。请重试或手动打款。错误：' + msg)
+        throw autoErr  // re-throw so payOpen stays open
       }
     }
-    payOpen.value = false
-    silentRefresh(); fetchPendingCount()
   } catch(e) { ElMessage.error(e.message) }
   finally { submitting.value = false }
 }
